@@ -3,6 +3,12 @@ from PIL import ImageFont
 import db_interactions
 
 
+# theme stuff
+ctk.set_appearance_mode("dark")
+red = "#d62c20"
+hover_red = "#781610"
+
+
 # Validation function to allow only digits
 def validate_input(new_value):
     """Check if the new value contains only digits and is not longer than 12 characters"""
@@ -43,7 +49,7 @@ def width_splice(text, font_size):
     return "\n".join(lines)
 
 
-def stackable_frame(master, title, desc, button_text):
+def stackable_frame(master, title, desc, button_text, command):
     """A stackable frame that has a title and description on the left, and a button on the right"""
     frame_house = ctk.CTkFrame(master, height=80)
     frame_house.pack(fill="x", padx=40, pady=7)
@@ -60,13 +66,13 @@ def stackable_frame(master, title, desc, button_text):
     ctk.CTkLabel(frame_house, text=desc, font=("Ariel", 16), anchor="nw").grid(column=0, row=1, sticky="w", padx=15, pady=5)
 
     # button
-    ctk.CTkButton(frame_house, text=button_text, fg_color="#d62c20", hover_color="#781610").grid(column=1, row=0, rowspan=2, padx=8)
+    ctk.CTkButton(frame_house, text=button_text, fg_color=red, hover_color=hover_red, command=command).grid(column=1, row=0, rowspan=2, padx=8)
 
 
 class MainWindow:
     """The whole window that does all of everything"""
-    # initial setup
     def __init__(self):
+        # initial setup
         self.window = ctk.CTk()
         self.window.geometry("1000x700")
         self.window.grid_columnconfigure(1, weight=1)
@@ -87,7 +93,7 @@ class MainWindow:
             button = ctk.CTkButton(l_col, text=button_name, command=cmd)
             button.pack(padx=10, pady=11)
 
-        danger_zone_button = ctk.CTkButton(l_col, fg_color="#d62c20", hover_color="#781610", text="Danger Zone", command=lambda: self.danger_zone.tkraise())
+        danger_zone_button = ctk.CTkButton(l_col, fg_color=red, hover_color=hover_red, text="Danger Zone", command=lambda: self.danger_zone.tkraise())
         danger_zone_button.pack(side=ctk.BOTTOM, padx=10, pady=11)
 
         # workspace
@@ -151,19 +157,45 @@ class MainWindow:
 
         margin(self.danger_zone)
 
-        data = [  # Title, Description, Button text
-            ("Format Database", "resets the database with all default tables", "Format"),
-            ("Populate Database", "fills the database up with random data. Useful for testing", "Populate")
+        data = [  # Title, Description, Button text, command
+            ("Format Database", "resets the database with all default tables", "Format", self.format_database),
+            ("Populate Database", "fills the database up with random data. Useful for testing", "Populate", lambda: print("Populate!"))
         ]
 
-        for title, desc, btxt in data:
-            stackable_frame(self.danger_zone, title, desc, btxt)
+        for args in data:
+            stackable_frame(self.danger_zone, *args)
 
         ###################
         # Edit parts
         ###################
         self.edit_parts = ctk.CTkFrame(self.workspace, fg_color="green")
         self.edit_parts.grid(row=0, column=0, sticky="news")
+
+        ################
+        # error message
+        ################
+        padx = 7
+        pady = 7
+        height = 70
+        self.popup_pos = {"x": padx, "y": pady}
+
+        # make the popup
+        self.popup = ctk.CTkFrame(self.workspace, width=self.workspace.winfo_width() - 2*padx, height=height, fg_color=red)
+        self.popup.grid_propagate(False)  # prevent the frame from shrinking to fit the text
+        self.popup.grid_columnconfigure(0, weight=9)
+        self.popup.grid_columnconfigure(1, weight=1)
+        self.popup.grid_rowconfigure(0, weight=1)
+        self.popup.grid_rowconfigure(1, weight=1)
+
+        # title and body text
+        popup_title = ctk.CTkLabel(self.popup, text="Something went wrong!", font=("Arial", 19, "bold"), anchor="sw")
+        self.popup_text = ctk.CTkLabel(self.popup, text="error text", font=("Arial", 17), anchor="nw")
+        popup_title.grid(column=0, row=0, sticky="news", padx=40)
+        self.popup_text.grid(column=0, row=1, sticky="news", padx=40)
+
+        # x button
+        x_button = ctk.CTkButton(self.popup, text="✕", font=("Arial", 35), width=50, height=50, fg_color="transparent", hover=False, anchor="w", command=self.popup.place_forget)
+        x_button.grid(column=1, row=0, rowspan=2)
 
         ###################
         # home
@@ -173,7 +205,7 @@ class MainWindow:
 
         margin(self.home_frame)
 
-        # include the readme
+        # include the readme (still part of home)
         with open("README.md", "r") as readme:
             for line in readme.readlines():
 
@@ -195,6 +227,28 @@ class MainWindow:
 
                 label = ctk.CTkLabel(self.home_frame, text=label_text, font=("Arial", info[1], "bold"), justify="left")
                 label.pack(pady=10, padx=40, anchor="w")
+
+    def error_msg(self, error_text):
+        # draw
+        self.popup.configure(width=self.workspace.winfo_width() - 2*self.popup_pos["x"])
+        self.popup_text.configure(text=error_text)
+        self.popup.place(**self.popup_pos)
+        self.popup.tkraise()
+
+    def check_db_connection(self):
+        try:
+            self.connection
+            return True
+        except AttributeError:
+            # self.popup_text.configure(text="erm, actually")
+            self.error_msg("We couldn't find a database to connect to.")
+
+            return False
+
+    def format_database(self):
+        self.check_db_connection()
+
+        print("Format!")
 
     def checkin_continue(self, *_):
         print(self.checkin_barcode.get())
