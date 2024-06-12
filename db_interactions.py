@@ -10,7 +10,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from datetime import date, datetime
 
 # random generation (populate database)
-from lorem import get_word, get_sentence
+import lorem
 from random import randint, choice
 from names import get_first_name, get_last_name
 
@@ -121,6 +121,8 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
     except Exception as e:
         return e, *args
 
+def random_word():
+    return lorem.sentence().split(" ")[0]
 
 def strip_string(string_text):
     """Remove special characters and stuff from searches so that you don't miss something because of a dot"""
@@ -478,9 +480,9 @@ class Organizer:
             mfr_name = choice([
                 get_last_name(),
                 "DigiKey",
-                get_word().title() + get_word().title(),
-                get_last_name() + get_word(),
-                get_word().title()
+                random_word().title() + random_word().title(),
+                get_last_name() + random_word(),
+                random_word().title()
             ])
 
             # insert into tabel if it doesn't already exist

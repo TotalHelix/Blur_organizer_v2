@@ -1,4 +1,4 @@
-## Blur part organizer
+# Blur part organizer
 
 to begin, select one of the sections on the left side of the window.
 
