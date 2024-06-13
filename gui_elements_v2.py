@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from PIL import ImageFont
-import db_interactions
-
+from db_interactions import Organizer
+from psycopg2 import OperationalError as OError
 
 # theme stuff
 ctk.set_appearance_mode("dark")
@@ -79,6 +79,14 @@ class MainWindow:
         self.window.grid_rowconfigure(0, weight=1)
         self.window.resizable(False, False)
         self.window.title("Blur Part Organizer")
+
+        # for interactions with the database
+        self.controller = None
+        try:
+            self.controller = Organizer()
+            self.connection = True
+        except OError:
+            self.connection = False
 
         # left column
         l_col = ctk.CTkFrame(self.window, fg_color="transparent")
@@ -171,9 +179,9 @@ class MainWindow:
         self.edit_parts = ctk.CTkFrame(self.workspace, fg_color="green")
         self.edit_parts.grid(row=0, column=0, sticky="news")
 
-        ################
-        # error message
-        ################
+        #######################
+        # error message popup
+        #######################
         padx = 7
         pady = 7
         height = 70
@@ -194,8 +202,8 @@ class MainWindow:
         self.popup_text.grid(column=0, row=1, sticky="news", padx=40)
 
         # x button
-        x_button = ctk.CTkButton(self.popup, text="✕", font=("Arial", 35), width=50, height=50, fg_color="transparent", hover=False, anchor="w", command=self.popup.place_forget)
-        x_button.grid(column=1, row=0, rowspan=2)
+        x_button = ctk.CTkButton(self.popup, text="✕", font=("Arial", 20), width=30, height=30, fg_color="transparent", hover=False, anchor="ne", command=self.popup.place_forget)
+        x_button.grid(column=1, row=0)
 
         ###################
         # home
@@ -236,19 +244,21 @@ class MainWindow:
         self.popup.tkraise()
 
     def check_db_connection(self):
-        try:
-            self.connection
+        if self.connection:
             return True
-        except AttributeError:
+        else:
             # self.popup_text.configure(text="erm, actually")
-            self.error_msg("We couldn't find a database to connect to.")
-
+            self.error_msg("We couldn't find a database to connect to. Make sure that postgreSQL is installed.")
             return False
 
     def format_database(self):
-        self.check_db_connection()
+        # make sure that we are able to connect to the database
+        if not self.check_db_connection(): return
 
-        print("Format!")
+        self.controller.format_database()
 
     def checkin_continue(self, *_):
+        # check for database connection
+        if not self.check_db_connection(): return
+
         print(self.checkin_barcode.get())
