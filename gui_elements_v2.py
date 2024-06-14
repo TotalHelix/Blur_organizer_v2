@@ -183,7 +183,7 @@ class MainWindow:
 
         data = [  # Title, Description, Button text, command
             ("Format Database", "resets the database with all default tables", "Format", self.format_database),
-            ("Populate Database", "fills the database up with random data. Useful for testing", "Populate", lambda: print("Populate!"))
+            ("Populate Database", "fills the database up with random data. Useful for testing", "Populate", self.populate_database)
         ]
 
         for args in data:
@@ -290,6 +290,18 @@ class MainWindow:
             with Organizer("postgres") as postgres:
                 postgres.format_database()
             self.popup_msg("Database formatted successfully", "success")
+        except Exception as error:
+            self.popup_msg(error)
+
+    def populate_database(self):
+        # make sure that we are able to connect to the database
+        if not self.check_db_connection(accept_postgres=True): return
+
+        # try to format the database as postgres
+        try:
+            with Organizer("postgres") as postgres:
+                postgres.populate_db()
+            self.popup_msg("Database populated successfully", "success")
         except Exception as error:
             self.popup_msg(error)
 

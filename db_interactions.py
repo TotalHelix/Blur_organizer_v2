@@ -516,7 +516,7 @@ class Organizer:
             # pick a manufacturer
             mfr = choice(self.get_rows("mfr_id"))
             # come up with a description
-            desc = get_sentence()
+            desc = lorem.sentence()
 
             # create the appropriate upc code
             other_mfrs = self.get_rows("part_mfr")
