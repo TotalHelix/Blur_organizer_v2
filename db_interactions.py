@@ -290,6 +290,7 @@ class Organizer:
             create_command = create_command[:-2] + "\n);"
 
             self.cursor.execute(create_command)
+        print("did the whole thing")
 
     def mfr_id_from_name(self, mfr_name):
         """get return the mfr id given the mfr name"""

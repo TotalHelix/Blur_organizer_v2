@@ -303,7 +303,7 @@ class MainWindow:
                 postgres.populate_db()
             self.popup_msg("Database populated successfully", "success")
         except Exception as error:
-            self.popup_msg(error)
+            self.popup_msg(str(error))
 
     def checkin_continue(self, *_):
         # check for database connection
