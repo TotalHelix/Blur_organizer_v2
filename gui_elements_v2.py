@@ -6,6 +6,7 @@ from psycopg2 import OperationalError as OError
 # theme stuff
 ctk.set_appearance_mode("dark")
 red = "#d62c20"
+green = "#32a852"
 hover_red = "#781610"
 
 
@@ -82,10 +83,25 @@ class MainWindow:
 
         # for interactions with the database
         self.controller = None
+        self.postgres_exists = False
+        self.connection = False
         try:
-            self.controller = Organizer()
+            with Organizer("postgres") as postgres:
+                # we were able to access postgres
+                self.postgres_exists = True
+
+                # see if the customer role does not exist
+                if not postgres.customer_exists():
+                    # create a customer role
+                    postgres.new_user()
+                    postgres.conn.commit()
+
+            # now we should be able to connect as a customer with no problem
+            self.controller = Organizer("customer")
+
             self.connection = True
-        except OError:
+        except OError as errormsg:
+            print(errormsg)
             self.connection = False
 
         # left column
@@ -184,11 +200,10 @@ class MainWindow:
         #######################
         padx = 7
         pady = 7
-        height = 70
         self.popup_pos = {"x": padx, "y": pady}
 
         # make the popup
-        self.popup = ctk.CTkFrame(self.workspace, width=self.workspace.winfo_width() - 2*padx, height=height, fg_color=red)
+        self.popup = ctk.CTkFrame(self.workspace, width=self.workspace.winfo_width() - 2*padx, height=70, fg_color=red)
         self.popup.grid_propagate(False)  # prevent the frame from shrinking to fit the text
         self.popup.grid_columnconfigure(0, weight=9)
         self.popup.grid_columnconfigure(1, weight=1)
@@ -196,9 +211,9 @@ class MainWindow:
         self.popup.grid_rowconfigure(1, weight=1)
 
         # title and body text
-        popup_title = ctk.CTkLabel(self.popup, text="Something went wrong!", font=("Arial", 19, "bold"), anchor="sw")
-        self.popup_text = ctk.CTkLabel(self.popup, text="error text", font=("Arial", 17), anchor="nw")
-        popup_title.grid(column=0, row=0, sticky="news", padx=40)
+        self.popup_title = ctk.CTkLabel(self.popup, text="Something went wrong!", font=("Arial", 19, "bold"), anchor="sw")
+        self.popup_text = ctk.CTkLabel(self.popup, text="error text", font=("Arial", 17), anchor="nw", justify="left")
+        self.popup_title.grid(column=0, row=0, sticky="news", padx=40)
         self.popup_text.grid(column=0, row=1, sticky="news", padx=40)
 
         # x button
@@ -236,26 +251,47 @@ class MainWindow:
                 label = ctk.CTkLabel(self.home_frame, text=label_text, font=("Arial", info[1], "bold"), justify="left")
                 label.pack(pady=10, padx=40, anchor="w")
 
-    def error_msg(self, error_text):
+    def popup_msg(self, error_text, popup_type="error"):
         # draw
-        self.popup.configure(width=self.workspace.winfo_width() - 2*self.popup_pos["x"])
+        error_text = width_splice(error_text, 17)
+        new_width = self.workspace.winfo_width() - 2*self.popup_pos["x"]
+        stretch_height = 70 + 18*error_text.count("\n")
+        title_text, color = {"error": ("Something went wrong!", red), "success": ("Success!", green)}[popup_type]
+
+        self.popup_title.configure(text=title_text)
+        self.popup.configure(width=new_width, height=stretch_height, fg_color=color)
         self.popup_text.configure(text=error_text)
         self.popup.place(**self.popup_pos)
         self.popup.tkraise()
 
-    def check_db_connection(self):
+        if popup_type == "success":
+            self.window.after(2000, self.popup.place_forget)
+
+    def check_db_connection(self, accept_postgres=False):
         if self.connection:
             return True
+        elif self.postgres_exists:
+            if accept_postgres:
+                return True
+            else:
+                self.popup_msg("We were able to connect to postgres, but not the parts database. Try reformatting under 'Danger Zone'.")
+                return False
         else:
-            # self.popup_text.configure(text="erm, actually")
-            self.error_msg("We couldn't find a database to connect to. Make sure that postgreSQL is installed.")
+            # can't connect to a database
+            self.popup_msg("We couldn't find a database to connect to. Make sure that postgreSQL is installed.")
             return False
 
     def format_database(self):
         # make sure that we are able to connect to the database
-        if not self.check_db_connection(): return
+        if not self.check_db_connection(accept_postgres=True): return
 
-        self.controller.format_database()
+        # try to format the database as postgres
+        try:
+            with Organizer("postgres") as postgres:
+                postgres.format_database()
+            self.popup_msg("Database formatted successfully", "success")
+        except Exception as error:
+            self.popup_msg(error)
 
     def checkin_continue(self, *_):
         # check for database connection

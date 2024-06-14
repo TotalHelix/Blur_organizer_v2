@@ -151,6 +151,13 @@ class Organizer:
         # set up the connection and cursor, this is how we talk to the database
         self.cursor = self.conn.cursor()
 
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.cursor.close()
+        self.conn.close()
+
     def format_database(self):
         """set up all the tables of the database"""
 
@@ -180,7 +187,7 @@ class Organizer:
         new_db_sql = "CREATE DATABASE parts_organizer_db;"
         self.cursor.execute(new_db_sql)
 
-        # lst thing before switching to the new db, drop anything from the customer tole in postgres
+        # first thing before switching to the new db, drop anything from the customer tole in postgres
         self.disconnect_customer()
 
         # ----- now that the right database exists, let's connect to it
@@ -324,10 +331,8 @@ class Organizer:
             key_cropped = key
 
         search_sql = f"SELECT {read_col} FROM {table} WHERE CAST({column} as varchar) = '{key_cropped}'"
-        print(search_sql)
         self.cursor.execute(search_sql)
         results = self.cursor.fetchall()
-        print(results)
         return [str(row[0]) for row in results]
 
     def update_user(self, old_id, fname, lname, email):
@@ -714,7 +719,7 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}""
 
         # if one of these is missing
         if not old_mfr_id or not new_mfr_id:
-            print("one of the mfrs couldn't find an id")
+            print("one manufacturer couldn't find an id")
             return
 
         # do the transferring
@@ -1183,3 +1188,9 @@ WHERE mfr_name = '{target_name}'"""
         }
 
         return formatted_results
+
+    def customer_exists(self):
+        user_check_sql = "SELECT 1 FROM pg_roles WHERE rolname='customer'"
+        self.cursor.execute(user_check_sql)
+
+        return "customer" in self.cursor.fetchall()
