@@ -151,10 +151,11 @@ class Organizer:
         # set up the connection and cursor, this is how we talk to the database
         self.cursor = self.conn.cursor()
 
-    def __enter__(self):
+    def __enter__(self, user="customer"):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        self.conn.commit()
         self.cursor.close()
         self.conn.close()
 
@@ -168,6 +169,7 @@ class Organizer:
 
         # if the database does already exist
         if "parts_organizer_db" in [name[0] for name in self.cursor.fetchall()]:
+            print("there was a database in there")
             # disconnect from db
             terminate_conn = """
             SELECT pg_terminate_backend(pid) 
@@ -180,14 +182,17 @@ class Organizer:
             self.refresh_cursor()
 
             # drop database
+            print("here we drop it")
             drop_db = "DROP DATABASE parts_organizer_db;"
             self.cursor.execute(drop_db)
+
+            self.conn.commit()
 
         # create a new database
         new_db_sql = "CREATE DATABASE parts_organizer_db;"
         self.cursor.execute(new_db_sql)
 
-        # first thing before switching to the new db, drop anything from the customer tole in postgres
+        # first thing before switching to the new db, drop anything from the customer role in postgres
         self.disconnect_customer()
 
         # ----- now that the right database exists, let's connect to it
@@ -290,6 +295,13 @@ class Organizer:
             create_command = create_command[:-2] + "\n);"
 
             self.cursor.execute(create_command)
+            self.conn.commit()
+
+            # remake the customer
+            self.new_user()
+            self.conn.commit()
+
+            # recreate the
         print("did the whole thing")
 
     def mfr_id_from_name(self, mfr_name):
@@ -398,6 +410,14 @@ class Organizer:
         """dumb function that creates a user because it gets mad when it's in the other one"""
         # first off, get rid of role dependencies of they exist
         self.disconnect_customer()
+        print("does this actually happen?")
+
+        # connect to the database
+        self.cursor.close()
+        self.conn.commit()
+        self.conn.close()
+        self.conn = connect("user=postgres password=blur4321 dbname=parts_organizer_db")
+        self.cursor = self.conn.cursor()
 
         user_create = """
         DROP ROLE IF EXISTS customer;
@@ -406,13 +426,22 @@ class Organizer:
             NOINHERIT
             PASSWORD 'blur4321';
         
+        GRANT CONNECT ON DATABASE parts_organizer_db TO customer;
         GRANT SELECT ON ALL TABLES IN SCHEMA public TO customer;
         GRANT INSERT ON ALL TABLES IN SCHEMA public TO customer;
         GRANT DELETE ON ALL TABLES IN SCHEMA public TO customer;
         GRANT UPDATE ON ALL TABLES IN SCHEMA public TO customer;
         GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO customer;
+        
+        GRANT CONNECT ON DATABASE parts_organizer_db TO postgres;
+        GRANT SELECT ON ALL TABLES IN SCHEMA public TO postgres;
+        GRANT INSERT ON ALL TABLES IN SCHEMA public TO postgres;
+        GRANT DELETE ON ALL TABLES IN SCHEMA public TO postgres;
+        GRANT UPDATE ON ALL TABLES IN SCHEMA public TO postgres;
+        GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO postgres;
         """
         self.cursor.execute(user_create)
+        self.conn.commit()
 
     def get_rows(self, column_name):
         """get all the values for a specified column"""
@@ -439,6 +468,11 @@ class Organizer:
 
     def populate_db(self):
         """fill the desired table with sample data"""
+
+        # get the current tables
+        get_tables_sql = "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
+        self.cursor.execute(get_tables_sql)
+        print(self.cursor.fetchall())
 
         # first off, this does not need superuser
         self.cursor.close()

@@ -25,6 +25,7 @@ def margin(master):
     """a margin that you should add to the top of each frame"""
     ctk.CTkLabel(master, text=" ", font=("Ariel", 1)).pack()
 
+
 def width_splice(text, font_size):
     """break text after a certain number of pixels in a font"""
     font = ImageFont.truetype("arial.ttf", font_size)
@@ -90,12 +91,6 @@ class MainWindow:
                 # we were able to access postgres
                 self.postgres_exists = True
 
-                # see if the customer role does not exist
-                if not postgres.customer_exists():
-                    # create a customer role
-                    postgres.new_user()
-                    postgres.conn.commit()
-
             # now we should be able to connect as a customer with no problem
             self.controller = Organizer("customer")
 
@@ -111,7 +106,7 @@ class MainWindow:
             "Home": lambda: self.home_frame.tkraise(),
             "Check out": lambda: self.checkout_frame.tkraise(),
             "Check in": lambda: self.checkin_frame.tkraise(),
-            "Edit parts": lambda: self.edit_parts.tkraise()
+            "Find a part": lambda: self.find_part.tkraise()
         }
         for button_name, cmd in side_buttons.items():
             button = ctk.CTkButton(l_col, text=button_name, command=cmd)
@@ -190,10 +185,35 @@ class MainWindow:
             stackable_frame(self.danger_zone, *args)
 
         ###################
-        # Edit parts
+        # Find a parts
         ###################
-        self.edit_parts = ctk.CTkFrame(self.workspace, fg_color="green")
-        self.edit_parts.grid(row=0, column=0, sticky="news")
+        self.find_part = ctk.CTkFrame(self.workspace)
+        self.find_part.grid(row=0, column=0, sticky="news")
+        self.find_part.columnconfigure(0, weight=1)
+        self.find_part.columnconfigure(1, weight=1)
+        self.find_part.rowconfigure(0, weight=0)
+        self.find_part.rowconfigure(1, weight=1)
+        self.find_part.rowconfigure(2, weight=0)
+
+        # left side (search, results, add button)
+        self.search_box = ctk.CTkEntry(self.find_part, placeholder_text="Search for a part")
+        self.search_box.grid(row=0, column=0, sticky="nsew", padx=40, pady=20)
+
+        self.result_parts = ctk.CTkScrollableFrame(self.find_part)
+        self.result_parts.grid(row=1, column=0, sticky="nsew", padx=40, pady=0)
+
+        self.add_part = ctk.CTkButton(self.find_part, text="+ Add", width=100, height=32)
+        self.add_part.grid(row=2, column=0, sticky="w", padx=40, pady=20)
+
+        # right side (display part info)
+        part_info_display_frame = ctk.CTkFrame(self.find_part, fg_color="transparent")
+        part_info_display_frame.grid(row=0, column=1, rowspan=3, sticky="nsew")
+
+        self.part_generic_info = ctk.CTkLabel(part_info_display_frame, fg_color="transparent", text="PN:\n\nPlacement:\n\nManufacturer:\n\nManufacturer PN:\n\ndescription:", justify="left", font=("Ariel", 18))
+        self.part_generic_info.pack(padx=40, pady=20, anchor="w")
+
+        self.part_description = ctk.CTkTextbox(part_info_display_frame, state="disabled")
+        self.part_description.pack(padx=40, pady=0, anchor="n", fill="x", expand=True)
 
         #######################
         # error message popup
@@ -289,9 +309,11 @@ class MainWindow:
         try:
             with Organizer("postgres") as postgres:
                 postgres.format_database()
+                print("ok")
             self.popup_msg("Database formatted successfully", "success")
         except Exception as error:
-            self.popup_msg(error)
+            self.popup_msg(str(error))
+            # raise error
 
     def populate_database(self):
         # make sure that we are able to connect to the database
@@ -299,11 +321,12 @@ class MainWindow:
 
         # try to format the database as postgres
         try:
-            with Organizer("postgres") as postgres:
+            with Organizer() as postgres:
                 postgres.populate_db()
-            self.popup_msg("Database populated successfully", "success")
+                self.popup_msg("Database populated successfully", "success")
         except Exception as error:
             self.popup_msg(str(error))
+            raise error
 
     def checkin_continue(self, *_):
         # check for database connection
