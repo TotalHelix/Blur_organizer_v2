@@ -513,7 +513,7 @@ class Organizer:
             email += "@"
             email += choice(["gmail.com", "hotmail.com", "blurpd.com", "wcpss.net", "yahoo.com"])
 
-            self.cursor.execute(f"INSERT INTO users VALUES ('{user_id}','{f_name}','{l_name}','{email}')")
+            self.cursor.execute(f"INSERT INTO users VALUES ('{user_id}', '{f_name}', '{l_name}', '{email}')")
         # the manufacturers table
         for _ in range(randint(6, 21)):
             # pick a random name for the mfr
@@ -1081,12 +1081,12 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
 
         # change the table into a dictionary
         formatted_results = {
-            "Description": search_results[4],
             "UPC code": str(search_results[0]).zfill(12),
             "Placement location": search_results[1],
             "Manufacturer": search_results[2],
             "Manufacturer PN": mfr_pn,
-            "Currently checked out by": checkout_holder
+            "Currently checked out by": checkout_holder,
+            "Description": search_results[4]
         }
 
         # return raw results if requested

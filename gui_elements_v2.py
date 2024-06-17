@@ -27,16 +27,18 @@ def margin(master):
     ctk.CTkLabel(master, text=" ", font=("Ariel", 1)).pack()
 
 
-def width_splice(text, font_size):
+def width_splice(text, font_size, max_width=650):
     """break text after a certain number of pixels in a font"""
     font = ImageFont.truetype("arial.ttf", font_size)
-    words = text.split()
+    words = text.split(" ")
     lines = []
     current_line = ""
     current_width = 0
-    max_width = 650
 
     for word in words:
+        if "\n" in word:
+            current_width = 0
+
         word_width = font.getlength(word + " ")
         if current_width + word_width <= max_width:
             current_line += word + " "
@@ -50,6 +52,13 @@ def width_splice(text, font_size):
         lines.append(current_line.strip())
 
     return "\n".join(lines)
+
+
+def textbox_write(textbox, text):
+    textbox.configure(state="normal")
+    textbox.delete("0.0", "end")
+    textbox.insert("0.0", text)
+    textbox.configure(state="disabled")
 
 
 def stackable_frame(master, title, desc, button_text, command):
@@ -186,22 +195,22 @@ class MainWindow:
             stackable_frame(self.danger_zone, *args)
 
         ###################
-        # Find a parts
+        # search gui
         ###################
         self.find_part = ctk.CTkFrame(self.workspace)
         self.find_part.grid(row=0, column=0, sticky="news")
-        self.find_part.columnconfigure(0, weight=1)
-        self.find_part.columnconfigure(1, weight=1)
+        self.find_part.columnconfigure(0, weight=1, minsize=300)
+        self.find_part.columnconfigure(1, weight=2, minsize=400)
         self.find_part.rowconfigure(0, weight=0)
         self.find_part.rowconfigure(1, weight=1)
         self.find_part.rowconfigure(2, weight=0)
 
         # left side (search, results, add button)
-        self.search_box = ctk.CTkEntry(self.find_part, placeholder_text="Search for a part")
+        self.search_box = ctk.CTkEntry(self.find_part, placeholder_text="Search for a part", width=200)
         self.search_box.grid(row=0, column=0, sticky="nsew", padx=40, pady=20)
         self.search_box.bind("<KeyRelease>", self.update_search)
 
-        self.result_parts = ctk.CTkScrollableFrame(self.find_part)
+        self.result_parts = ctk.CTkScrollableFrame(self.find_part, width=200)
         self.result_parts.grid(row=1, column=0, sticky="nsew", padx=40, pady=0)
         self.part_widgets = []
         self.selected_part = None
@@ -210,14 +219,17 @@ class MainWindow:
         self.add_part.grid(row=2, column=0, sticky="w", padx=40, pady=20)
 
         # right side (display part info)
-        part_info_display_frame = ctk.CTkFrame(self.find_part, fg_color="transparent")
-        part_info_display_frame.grid(row=0, column=1, rowspan=3, sticky="nsew")
+        part_info_display_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", width=350)
+        part_info_display_frame.grid(row=0, column=1, rowspan=2, sticky="nsew")
 
-        self.part_generic_info = ctk.CTkLabel(part_info_display_frame, fg_color="transparent", text="PN:\n\nPlacement:\n\nManufacturer:\n\nManufacturer PN:\n\ndescription:", justify="left", font=("Ariel", 18))
-        self.part_generic_info.pack(padx=20, pady=20, anchor="w")
+        self.part_generic_info = ctk.CTkLabel(part_info_display_frame, fg_color="transparent", text="", justify="left", font=("Ariel", 16), width=300, anchor="w")
+        self.part_generic_info.pack(padx=0, pady=20, anchor="w", expand=False)
 
-        self.part_description = ctk.CTkTextbox(part_info_display_frame, state="disabled")
-        self.part_description.pack(padx=40, pady=0, anchor="n", fill="x", expand=True)
+
+        # description box
+        # ctk.CTkLabel(part_info_display_frame, text="Description:").pack(padx=20)
+        # self.part_description = ctk.CTkTextbox(part_info_display_frame, state="disabled")
+        # self.part_description.pack(padx=40, pady=0, anchor="n", fill="x", expand=True)
 
         #######################
         # error message popup
@@ -375,18 +387,16 @@ class MainWindow:
 
         # get the info for the selected part
         part_info = self.controller.part_data(button.cget("text"))
-        print(part_info)
+
         # display the part info
+        self.part_generic_info.configure(text="")
+        new_text = ""
         for key, value in part_info.items():
-            print(key)
-            if key.lower() == "description":
-                self.part_description.delete("0.0", "end")
-                self.part_description.insert("0.0", value)
-            else:
-                self.part_generic_info.configure(
-                    self.part_generic_info.cget("text") +
-                    f"{key}: {value}\n\ndescription:"
-                )
+            # if key.lower() == "description":
+            #     textbox_write(self.part_description, value)
+            # else:
 
+            new_text += f"{key}: {value}\n\n"
 
-
+        new_text = width_splice(new_text, 16, 400)
+        self.part_generic_info.configure(text=new_text)
