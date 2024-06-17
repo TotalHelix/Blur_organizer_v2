@@ -966,7 +966,7 @@ WHERE checked_out_part = {part_id}"""
                 connector = "OR"
 
                 # add the filter table
-                search_sql += filter_name.split('-')[2]
+                search_sql += filter_name  # .split('-')[2]
 
                 # finish off the line
                 search_sql += f" as varchar)) LIKE '%{search_term.lower()}%'\n"
@@ -1018,18 +1018,27 @@ WHERE checked_out_part = {part_id}"""
     # ------ functions unique to each search area
     # the foo_search makes the list that you see and can pick from
     # the foo_data generates that right hand column with all the info
-    # yes you do have to change it in every one if you want to make a change, there
-    # was just too much of the code as unique to make a generalized function again
 
     # parts
-    def part_search(self, search_term, filters):
+    def part_search(self, search_term, search_columns=None):
         """get the matching upc codes to a search term"""
         # sql to search for search term
+
+        if search_columns is None:
+            search_columns = {
+                "part_upc": True,
+                "part_placement": True,
+                "mfr_pn": True,
+                "mfr_name": True,
+                "part_desc": True
+            }
+
+
         search_sql = f"""
 SELECT part_upc FROM parts 
 JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
 """
-        results = self.search_general(search_sql, search_term, filters)
+        results = self.search_general(search_sql, search_term, search_columns)
         return [str(item).zfill(12) for item in results]
 
     def part_data(self, target_upc, raw=False):

@@ -21,6 +21,7 @@ def validate_input(new_value):
     else:
         return False
 
+
 def margin(master):
     """a margin that you should add to the top of each frame"""
     ctk.CTkLabel(master, text=" ", font=("Ariel", 1)).pack()
@@ -106,7 +107,7 @@ class MainWindow:
             "Home": lambda: self.home_frame.tkraise(),
             "Check out": lambda: self.checkout_frame.tkraise(),
             "Check in": lambda: self.checkin_frame.tkraise(),
-            "Find a part": lambda: self.find_part.tkraise()
+            "Find a part": lambda: self.update_search()
         }
         for button_name, cmd in side_buttons.items():
             button = ctk.CTkButton(l_col, text=button_name, command=cmd)
@@ -198,9 +199,12 @@ class MainWindow:
         # left side (search, results, add button)
         self.search_box = ctk.CTkEntry(self.find_part, placeholder_text="Search for a part")
         self.search_box.grid(row=0, column=0, sticky="nsew", padx=40, pady=20)
+        self.search_box.bind("<KeyRelease>", self.update_search)
 
         self.result_parts = ctk.CTkScrollableFrame(self.find_part)
         self.result_parts.grid(row=1, column=0, sticky="nsew", padx=40, pady=0)
+        self.part_widgets = []
+        self.selected_part = None
 
         self.add_part = ctk.CTkButton(self.find_part, text="+ Add", width=100, height=32)
         self.add_part.grid(row=2, column=0, sticky="w", padx=40, pady=20)
@@ -210,7 +214,7 @@ class MainWindow:
         part_info_display_frame.grid(row=0, column=1, rowspan=3, sticky="nsew")
 
         self.part_generic_info = ctk.CTkLabel(part_info_display_frame, fg_color="transparent", text="PN:\n\nPlacement:\n\nManufacturer:\n\nManufacturer PN:\n\ndescription:", justify="left", font=("Ariel", 18))
-        self.part_generic_info.pack(padx=40, pady=20, anchor="w")
+        self.part_generic_info.pack(padx=20, pady=20, anchor="w")
 
         self.part_description = ctk.CTkTextbox(part_info_display_frame, state="disabled")
         self.part_description.pack(padx=40, pady=0, anchor="n", fill="x", expand=True)
@@ -333,3 +337,56 @@ class MainWindow:
         if not self.check_db_connection(): return
 
         print(self.checkin_barcode.get())
+
+    def clear_part_results(self):
+        # clear the scrolling frame that contains all the parts
+        for pwidget in self.part_widgets:
+            pwidget.pack_forget()
+        self.part_widgets = []
+
+    def update_search(self, *_):
+        # update the search scrollable frame to show new results
+        active = self.check_db_connection()
+        self.find_part.tkraise()
+
+        if active:
+            search = self.search_box.get()
+            parts = self.controller.part_search(search)
+
+            # add the parts into the scrolling frame
+            self.clear_part_results()
+            for i, part in enumerate(parts):
+                part_widget = ctk.CTkButton(self.result_parts, text=str(part), anchor="w", fg_color="transparent", command=lambda index=i: self.list_button_select(index))
+                part_widget.pack(fill="x", expand=True)
+                self.part_widgets.append(part_widget)
+
+    def list_button_select(self, button_index):
+        # select the targeted part and update the results accordingly
+
+        button = self.part_widgets[button_index]
+
+        # un-highlight the old selection
+        if self.selected_part:
+            self.selected_part.configure(fg_color="transparent")
+
+        # highlight the selected item
+        button.configure(fg_color="#1f6ba5")
+        self.selected_part = button
+
+        # get the info for the selected part
+        part_info = self.controller.part_data(button.cget("text"))
+        print(part_info)
+        # display the part info
+        for key, value in part_info.items():
+            print(key)
+            if key.lower() == "description":
+                self.part_description.delete("0.0", "end")
+                self.part_description.insert("0.0", value)
+            else:
+                self.part_generic_info.configure(
+                    self.part_generic_info.cget("text") +
+                    f"{key}: {value}\n\ndescription:"
+                )
+
+
+
