@@ -1,7 +1,7 @@
 import customtkinter as ctk
 from PIL import ImageFont
 from db_interactions import Organizer
-from psycopg2 import OperationalError as OError
+import psycopg2.errors as p2er
 
 # theme stuff
 ctk.set_appearance_mode("dark")
@@ -81,6 +81,14 @@ def stackable_frame(master, title, desc, button_text, command):
     ctk.CTkButton(frame_house, text=button_text, fg_color=red, hover_color=hover_red, command=command).grid(column=1, row=0, rowspan=2, padx=8)
 
 
+def max_length(text, length):
+    """max length for input validation"""
+    print(f"length {length} is a {type(length)}")
+    if length == "int": return text.isdigit()
+    if length == 0: return True
+    return len(text) <= length
+
+
 class MainWindow:
     """The whole window that does all of everything"""
     def __init__(self):
@@ -91,6 +99,7 @@ class MainWindow:
         self.window.grid_rowconfigure(0, weight=1)
         self.window.resizable(False, False)
         self.window.title("Blur Part Organizer")
+        self.popup_counter = 0
 
         # for interactions with the database
         self.controller = None
@@ -105,7 +114,7 @@ class MainWindow:
             self.controller = Organizer("customer")
 
             self.connection = True
-        except OError as errormsg:
+        except p2er.OperationalError as errormsg:
             print(errormsg)
             self.connection = False
 
@@ -131,9 +140,9 @@ class MainWindow:
         self.workspace.grid_rowconfigure(0, weight=1)
         self.workspace.grid_columnconfigure(0, weight=1)
 
-        #####################
+        ##########################################
         # different frames
-        #####################
+        ##########################################
 
         ###################
         # checkin
@@ -215,8 +224,16 @@ class MainWindow:
         self.part_widgets = []
         self.selected_part = None
 
-        self.add_part = ctk.CTkButton(self.find_part, text="+ Add", width=100, height=32)
-        self.add_part.grid(row=2, column=0, sticky="w", padx=40, pady=20)
+        # buttons that run along the bottom
+        thin_frame = ctk.CTkFrame(self.find_part, fg_color="transparent")
+        thin_frame.grid(column=0, row=2, columnspan=2, padx=40, pady=10, sticky="ew")
+
+        button_form = {"master": thin_frame, "width": 100, "height": 32}
+        button_pack = {"side": "left", "padx": 10}
+        #                                                                       has to ba lambda bc the new part form doesn't exist yet
+        ctk.CTkButton(**button_form, text="+ Add", command=lambda: self.new_part_form.tkraise()).pack(**button_pack)
+        ctk.CTkButton(**button_form, text="️🗑 Delete", command=self.remove_part).pack(**button_pack)
+        ctk.CTkButton(**button_form, text="🖉 Edit", command=self.edit_part).pack(**button_pack)
 
         # right side (display part info)
         part_info_display_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", width=350)
@@ -225,11 +242,36 @@ class MainWindow:
         self.part_generic_info = ctk.CTkLabel(part_info_display_frame, fg_color="transparent", text="", justify="left", font=("Ariel", 16), width=300, anchor="w")
         self.part_generic_info.pack(padx=0, pady=20, anchor="w", expand=False)
 
+        #######################
+        # add new part form
+        #######################
+        self.new_part_form = ctk.CTkFrame(self.workspace)
+        self.new_part_form.grid(row=0, column=0, sticky="news")
 
-        # description box
-        # ctk.CTkLabel(part_info_display_frame, text="Description:").pack(padx=20)
-        # self.part_description = ctk.CTkTextbox(part_info_display_frame, state="disabled")
-        # self.part_description.pack(padx=40, pady=0, anchor="n", fill="x", expand=True)
+        # back button
+        ctk.CTkButton(self.new_part_form, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=self.update_search).pack(fill="x", padx=40, pady=20)
+
+        # main question fields
+        questions = {
+            "Manufacturer": 255,
+            "Manufacturer's Part Number": 255,
+            "Placement location": 10,
+            "Description": 0,
+            "Quantity": "int"
+        }
+        self.add_part_entries = []
+        for question, length in questions.items():
+            # make a description text
+            ctk.CTkLabel(self.new_part_form, text="\n"+question, font=("Ariel", 16)).pack()
+
+            # make a new entry box with the key
+            validate_cmd = self.new_part_form.register(lambda e, l=length: max_length(e, l))
+            question_entry = ctk.CTkEntry(self.new_part_form, width=300, validate="key", validatecommand=(validate_cmd, "%P"))
+            question_entry.pack()
+            self.add_part_entries.append(question_entry)
+
+        # submit button
+        ctk.CTkButton(self.new_part_form, text="Submit", command=self.submit_new_part).pack(pady=20)
 
         #######################
         # error message popup
@@ -239,21 +281,21 @@ class MainWindow:
         self.popup_pos = {"x": padx, "y": pady}
 
         # make the popup
-        self.popup = ctk.CTkFrame(self.workspace, width=self.workspace.winfo_width() - 2*padx, height=70, fg_color=red)
-        self.popup.grid_propagate(False)  # prevent the frame from shrinking to fit the text
-        self.popup.grid_columnconfigure(0, weight=9)
-        self.popup.grid_columnconfigure(1, weight=1)
-        self.popup.grid_rowconfigure(0, weight=1)
-        self.popup.grid_rowconfigure(1, weight=1)
+        self.popup_window = ctk.CTkFrame(self.workspace, width=self.workspace.winfo_width() - 2 * padx, height=70, fg_color=red)
+        self.popup_window.grid_propagate(False)  # prevent the frame from shrinking to fit the text
+        self.popup_window.grid_columnconfigure(0, weight=9)
+        self.popup_window.grid_columnconfigure(1, weight=1)
+        self.popup_window.grid_rowconfigure(0, weight=1)
+        self.popup_window.grid_rowconfigure(1, weight=1)
 
         # title and body text
-        self.popup_title = ctk.CTkLabel(self.popup, text="Something went wrong!", font=("Arial", 19, "bold"), anchor="sw")
-        self.popup_text = ctk.CTkLabel(self.popup, text="error text", font=("Arial", 17), anchor="nw", justify="left")
+        self.popup_title = ctk.CTkLabel(self.popup_window, text="Something went wrong!", font=("Arial", 19, "bold"), anchor="sw")
+        self.popup_text = ctk.CTkLabel(self.popup_window, text="error text", font=("Arial", 17), anchor="nw", justify="left")
         self.popup_title.grid(column=0, row=0, sticky="news", padx=40)
         self.popup_text.grid(column=0, row=1, sticky="news", padx=40)
 
         # x button
-        x_button = ctk.CTkButton(self.popup, text="✕", font=("Arial", 20), width=30, height=30, fg_color="transparent", hover=False, anchor="ne", command=self.popup.place_forget)
+        x_button = ctk.CTkButton(self.popup_window, text="✕", font=("Arial", 20), width=30, height=30, fg_color="transparent", hover=False, anchor="ne", command=self.popup_window.place_forget)
         x_button.grid(column=1, row=0)
 
         ###################
@@ -287,21 +329,60 @@ class MainWindow:
                 label = ctk.CTkLabel(self.home_frame, text=label_text, font=("Arial", info[1], "bold"), justify="left")
                 label.pack(pady=10, padx=40, anchor="w")
 
+    def edit_part(self):
+        pass
+
+    def remove_part(self):
+        """delete the selected part"""
+        part_upc = self.selected_part.cget("text")
+        self.controller.delete_generic(part_upc, "part")
+        self.update_search()
+
+        self.popup_msg("Deleted part "+part_upc, popup_type="success")
+
+    def submit_new_part(self):
+        # submits the fields in the forms
+        fields = [entry.get() for entry in self.add_part_entries]
+        try:
+            results = self.controller.add_part(fields[3], *fields[:3], fields[4])
+            print(results)
+        except p2er.UniqueViolation:
+            self.popup_msg("this placement already exists! to change the quantity of a part, select edit from the \"find a part\" tab.")
+
+    def reconnect_db(self):
+        # make a connection to the database
+        try:
+            self.controller = Organizer()
+            print("we have a new connection")
+        except Exception as er:
+            # raise er
+            self.popup_msg(er)
+
+    def forget_popup(self, popup_id):
+        print(popup_id)
+        print(self.popup_counter)
+        if popup_id == self.popup_counter:
+            self.popup_window.place_forget()
+            print("forgot")
+
     def popup_msg(self, error_text, popup_type="error"):
+        self.popup_counter += 1
+        popup_id = self.popup_counter
+
         # draw
-        error_text = width_splice(error_text, 17)
+        error_text = width_splice(str(error_text), 17)
         new_width = self.workspace.winfo_width() - 2*self.popup_pos["x"]
         stretch_height = 70 + 18*error_text.count("\n")
         title_text, color = {"error": ("Something went wrong!", red), "success": ("Success!", green)}[popup_type]
 
         self.popup_title.configure(text=title_text)
-        self.popup.configure(width=new_width, height=stretch_height, fg_color=color)
+        self.popup_window.configure(width=new_width, height=stretch_height, fg_color=color)
         self.popup_text.configure(text=error_text)
-        self.popup.place(**self.popup_pos)
-        self.popup.tkraise()
+        self.popup_window.place(**self.popup_pos)
+        self.popup_window.tkraise()
 
         if popup_type == "success":
-            self.window.after(2000, self.popup.place_forget)
+            self.window.after(2000, self.forget_popup, popup_id)
 
     def check_db_connection(self, accept_postgres=False):
         if self.connection:
@@ -330,6 +411,8 @@ class MainWindow:
         except Exception as error:
             self.popup_msg(str(error))
             # raise error
+        finally:
+            self.reconnect_db()
 
     def populate_database(self):
         # make sure that we are able to connect to the database
@@ -342,7 +425,6 @@ class MainWindow:
                 self.popup_msg("Database populated successfully", "success")
         except Exception as error:
             self.popup_msg(str(error))
-            raise error
 
     def checkin_continue(self, *_):
         # check for database connection
@@ -358,24 +440,33 @@ class MainWindow:
 
     def update_search(self, *_):
         # update the search scrollable frame to show new results
-        active = self.check_db_connection()
-        self.find_part.tkraise()
+        try:
+            active = self.check_db_connection()
+            self.find_part.tkraise()
 
-        if active:
-            search = self.search_box.get()
-            parts = self.controller.part_search(search)
+            if active:
+                search = self.search_box.get()
+                parts = self.controller.part_search(search)
 
-            # add the parts into the scrolling frame
-            self.clear_part_results()
-            for i, part in enumerate(parts):
-                part_widget = ctk.CTkButton(self.result_parts, text=str(part), anchor="w", fg_color="transparent", command=lambda index=i: self.list_button_select(index))
-                part_widget.pack(fill="x", expand=True)
-                self.part_widgets.append(part_widget)
+                # add the parts into the scrolling frame
+                self.clear_part_results()
+                for i, part in enumerate(parts):
+                    part_widget = ctk.CTkButton(
+                        self.result_parts, text=str(part), anchor="w", fg_color="transparent",
+                        hover=not part.lower() == "no matching items",
+                        command=lambda index=i: self.list_button_select(index)
+                    )
+                    part_widget.pack(fill="x", expand=True)
+                    self.part_widgets.append(part_widget)
+        except Exception as er:
+            self.popup_msg(str(er))
 
     def list_button_select(self, button_index):
         # select the targeted part and update the results accordingly
-
         button = self.part_widgets[button_index]
+
+        if button.cget("text").lower() == "no matching items":
+            return
 
         # un-highlight the old selection
         if self.selected_part:

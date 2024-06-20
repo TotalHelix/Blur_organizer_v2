@@ -229,11 +229,12 @@ class Organizer:
             "parts":
                 [
                     # name                  data type       len     primary key references           extra tags
-                    ["part_upc", "bigint", None, True, None, "NOT NULL"],
-                    ["part_placement", "varchar", "4", False, None, "NOT NULL UNIQUE"],
+                    ["part_upc",            "bigint",       None,   True,       None,               "NOT NULL"],
+                    ["part_placement", "varchar", "10", False, None, "NOT NULL UNIQUE"],
                     ["mfr_pn", "varchar", "255", False, None, ""],
                     ["part_mfr", "varchar", "255", False, 'manufacturers; mfr_id', "NOT NULL"],
-                    ["part_desc", "varchar", None, False, None, "NOT NULL"]
+                    ["part_desc", "varchar", None, False, None, "NOT NULL"],
+                    ["qty", "smallint", None, False, None, ""]
                 ],
 
             "part_locations":
@@ -567,7 +568,10 @@ class Organizer:
             # current date
             upc += date.today().strftime("%m%d%y")
 
-            sql = f"INSERT INTO parts VALUES ({upc}, '{placement}', '{mfr_pn}', '{mfr}', '{desc}')"
+            # make a quantity, weighted heavily to lower numbers
+            qty = randint(1, randint(1, randint(1, 50)))
+
+            sql = f"INSERT INTO parts VALUES ({upc}, '{placement}', '{mfr_pn}', '{mfr}', '{desc}', {qty})"
             self.cursor.execute(sql)
 
             # change the mfr table to display the number of parts
@@ -651,7 +655,7 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
 
         self.conn.commit()
 
-    def add_part(self, desc, mfr_name, mfr_pn, placement):
+    def add_part(self, desc, mfr_name, mfr_pn, placement, qty):
         """inset a row into the parts database"""
         # ----- get rid of special characters in the description
 
@@ -729,7 +733,7 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
         safe_placement = placement.replace("'", "''")
 
         # ----- perform the insertion
-        sql = f"INSERT INTO parts VALUES ({upc}, '{safe_placement}', '{safe_mfr_pn}', '{mfr_id}', '{safe_desc}')"
+        sql = f"INSERT INTO parts VALUES ({upc}, '{safe_placement}', '{safe_mfr_pn}', '{mfr_id}', '{safe_desc}', {qty})"
         self.cursor.execute(sql)
 
         # change the mfr table to display the number of parts
@@ -817,7 +821,7 @@ Please click "Add part" to add a part for the first time"""
 
         return filtered_users
 
-    def update_part(self, part_number, placement, mfr_pn, mfr, desc):
+    def update_part(self, part_number, placement, mfr_pn, mfr, desc, qty):
         """update the row in the parts table with the new date for the part"""
         # convert the mfr if a name is given instead of an id
         if isinstance(mfr, str) and not mfr.isnumeric():
@@ -1045,7 +1049,7 @@ JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
         """get the part information for a upc code"""
         # sql to search for search term
         search_sql = f"""
-SELECT part_upc, part_placement, mfr_name, mfr_pn, part_desc FROM parts 
+SELECT part_upc, part_placement, mfr_name, mfr_pn, part_desc, qty FROM parts 
 JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
 WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
         self.cursor.execute(search_sql)
@@ -1086,6 +1090,7 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
             "Manufacturer": search_results[2],
             "Manufacturer PN": mfr_pn,
             "Currently checked out by": checkout_holder,
+            "Quantity": search_results[5],
             "Description": search_results[4]
         }
 
