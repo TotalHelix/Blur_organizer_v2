@@ -826,7 +826,7 @@ Please click "Add part" to add a part for the first time"""
         # convert the mfr if a name is given instead of an id
         if isinstance(mfr, str) and not mfr.isnumeric():
 
-            placement = placement.UPPER()
+            placement = placement.upper()
 
             new_mfr = self.mfr_id_from_name(mfr)
             # if the new manufacturer isn't in the database
@@ -1091,7 +1091,7 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
             "UPC code": str(search_results[0]).zfill(12),
             "Placement location": search_results[1],
             "Manufacturer": search_results[2],
-            "Manufacturer PN": mfr_pn,
+            "Manufacturer's Part Number": mfr_pn,
             "Currently checked out by": checkout_holder,
             "Quantity": search_results[5],
             "Description": search_results[4]

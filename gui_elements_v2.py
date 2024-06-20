@@ -1,6 +1,3 @@
-import os
-import sys
-
 import customtkinter as ctk
 from PIL import ImageFont
 from db_interactions import Organizer
@@ -14,7 +11,7 @@ hover_red = "#781610"
 
 
 # Validation function to allow only digits
-def validate_input(new_value):
+def validate_upc(new_value):
     """Check if the new value contains only digits and is not longer than 12 characters"""
     if new_value.isdigit() and len(new_value) <= 12:
         return True
@@ -84,9 +81,10 @@ def stackable_frame(master, title, desc, button_text, command):
     ctk.CTkButton(frame_house, text=button_text, fg_color=red, hover_color=hover_red, command=command).grid(column=1, row=0, rowspan=2, padx=8)
 
 
-def max_length(text, length):
+def max_length_validate(text, length):
     """max length for input validation"""
     print(f"length {length} is a {type(length)}")
+    if text == "": return True
     if length == "int": return text.isdigit()
     if length == 0: return True
     return len(text) <= length
@@ -138,10 +136,11 @@ class MainWindow:
         l_col = ctk.CTkFrame(self.window, fg_color="transparent")
         l_col.grid(row=0, column=0, padx=10, pady=10, sticky="ns")
         side_buttons = {
+            # these have to be lambda again because the frames haven't been defined yet.
             "Home": lambda: self.home_frame.tkraise(),
             "Check out": lambda: self.checkout_frame.tkraise(),
             "Check in": lambda: self.checkin_frame.tkraise(),
-            "Find a part": lambda: self.update_search()
+            "Find a part": self.raise_find_part
         }
         for button_name, cmd in side_buttons.items():
             button = ctk.CTkButton(l_col, text=button_name, command=cmd)
@@ -177,7 +176,7 @@ class MainWindow:
         explanation_text.pack(pady=10)
 
         # Register the validation function
-        validate_command = self.checkin_frame.register(validate_input)
+        validate_command = self.checkin_frame.register(validate_upc)
 
         # Frame for Entry Field and Button
         input_frame = ctk.CTkFrame(self.checkin_frame)
@@ -265,7 +264,7 @@ class MainWindow:
         self.new_part_form.grid(row=0, column=0, sticky="news")
 
         # back button
-        ctk.CTkButton(self.new_part_form, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=self.update_search).pack(fill="x", padx=40, pady=20)
+        ctk.CTkButton(self.new_part_form, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=self.raise_find_part).pack(fill="x", padx=40, pady=20)
 
         # main question fields
         questions = {
@@ -275,17 +274,17 @@ class MainWindow:
             "Description": 0,
             "Quantity": "int"
         }
-        self.add_part_entries = []
+        self.add_part_entries = {}
         for question, length in questions.items():
             # make a description text
             ctk.CTkLabel(self.new_part_form, text="\n"+question, font=("Ariel", 16)).pack()
 
             # make a new entry box with the key
-            validate_cmd = self.new_part_form.register(lambda e, l=length: max_length(e, l))
+            validate_cmd = self.new_part_form.register(lambda e, l=length: max_length_validate(e, l))
             question_entry = ctk.CTkEntry(self.new_part_form, width=300, validate="key", validatecommand=(validate_cmd, "%P"))
             question_entry.bind("<FocusIn>", lambda *_, q=question_entry: q.configure(border_color="#565b5e"))
             question_entry.pack()
-            self.add_part_entries.append(question_entry)
+            self.add_part_entries[question] = question_entry
 
         # submit button
         ctk.CTkButton(self.new_part_form, text="Submit", command=self.submit_controller).pack(pady=20)
@@ -352,11 +351,26 @@ class MainWindow:
         self.form_mode_add = True  # set the form to add mode and not edit mode
         self.new_part_form.tkraise()
 
+        for name, entry in self.add_part_entries.items():
+            entry.delete(0, "end")
+
     @handle_exceptions
     def edit_part_form(self):
         """edit the information on the selected part"""
+        if not self.selected_part:
+            self.popup_msg("Please select a part to edit.")
+            return
+
         self.form_mode_add = False  # set the form to edit mode and not add mode
         self.new_part_form.tkraise()
+
+        current_upc = self.selected_part.cget("text")
+        data = self.controller.part_data(current_upc)
+        print(data)
+
+        for name, entry in self.add_part_entries.items():
+            entry.delete(0, "end")
+            entry.insert(0, data[name])
 
     @handle_exceptions
     def remove_part(self):
@@ -373,7 +387,7 @@ class MainWindow:
         # get the fields
         fields = []
 
-        for item in self.add_part_entries:
+        for item in self.add_part_entries.values():
             field_text = item.get()
 
             fields.append(field_text)
@@ -394,6 +408,13 @@ class MainWindow:
             selected_part_upc = self.selected_part.cget("text")
             print(fields)
             self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], qty=fields[4])
+
+        # go back to the select screen
+        index_list = [(self.selected_part.cget("text") == part_widget.cget("text")) for part_widget in self.part_widgets]
+        part_index = index_list.index(True)
+        self.list_button_select(part_index)
+
+        self.raise_find_part()
 
     @handle_exceptions
     def reconnect_db(self):
@@ -478,6 +499,7 @@ class MainWindow:
         except Exception as error:
             self.popup_msg(str(error))
 
+    @handle_exceptions
     def checkin_continue(self, *_):
         # check for database connection
         if not self.check_db_connection(): return
@@ -494,13 +516,16 @@ class MainWindow:
     @handle_exceptions
     def raise_find_part(self):
         """clear the search box and raise 'find a part'"""
-
+        self.find_part.tkraise()
+        self.search_box.delete("0", "end")
+        self.search_box.focus()
+        self.update_search()
 
     @handle_exceptions
     def update_search(self, *_):
         # update the search scrollable frame to show new results
         active = self.check_db_connection()
-        self.find_part.tkraise()
+        # self.find_part.tkraise()
 
         if active:
             search = self.search_box.get()
