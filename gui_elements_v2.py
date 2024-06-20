@@ -114,6 +114,7 @@ class MainWindow:
         self.window.title("Blur Part Organizer")
         self.popup_counter = 0
         self.form_mode_add = True
+        self.search_mode = "part"
 
         # for interactions with the database
         self.controller = None
@@ -138,9 +139,10 @@ class MainWindow:
         side_buttons = {
             # these have to be lambda again because the frames haven't been defined yet.
             "Home": lambda: self.home_frame.tkraise(),
-            "Check out": lambda: self.checkout_frame.tkraise(),
-            "Check in": lambda: self.checkin_frame.tkraise(),
-            "Find a part": self.raise_find_part
+            "Check Out": lambda: self.checkout_frame.tkraise(),
+            "Check In": lambda: self.checkin_frame.tkraise(),
+            "Search Parts": lambda: self.raise_search("part"),
+            "Search Users": lambda: self.raise_search("user")
         }
         for button_name, cmd in side_buttons.items():
             button = ctk.CTkButton(l_col, text=button_name, command=cmd)
@@ -264,7 +266,7 @@ class MainWindow:
         self.new_part_form.grid(row=0, column=0, sticky="news")
 
         # back button
-        ctk.CTkButton(self.new_part_form, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=self.raise_find_part).pack(fill="x", padx=40, pady=20)
+        ctk.CTkButton(self.new_part_form, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=lambda: self.raise_search("user")).pack(fill="x", padx=40, pady=20)
 
         # main question fields
         questions = {
@@ -414,7 +416,7 @@ class MainWindow:
         part_index = index_list.index(True)
         self.list_button_select(part_index)
 
-        self.raise_find_part()
+        self.raise_search(self.search_mode)
 
     @handle_exceptions
     def reconnect_db(self):
@@ -514,8 +516,10 @@ class MainWindow:
         self.part_widgets = []
 
     @handle_exceptions
-    def raise_find_part(self):
+    def raise_search(self, search_type):
         """clear the search box and raise 'find a part'"""
+        if search_type not in ["user", "part"]: raise Exception("Invalid search type. Must be either 'user' or 'part'.")
+        self.search_mode = search_type
         self.find_part.tkraise()
         self.search_box.delete("0", "end")
         self.search_box.focus()
@@ -529,13 +533,23 @@ class MainWindow:
 
         if active:
             search = self.search_box.get()
-            parts = self.controller.part_search(search)
+            if self.search_mode == "part":
+                parts = self.controller.part_search(search)
+            elif self.search_mode == "user":
+                parts = self.controller.user_search(search)
+            else:
+                raise Exception("the search mode is not set to either part or user.")
 
             # add the parts into the scrolling frame
             self.clear_part_results()
             for i, part in enumerate(parts):
+                if self.search_mode == "part":
+                    name_text = str(part)
+                else:
+                    name_text = ""
+
                 part_widget = ctk.CTkButton(
-                    self.result_parts, text=str(part), anchor="w", fg_color="transparent",
+                    self.result_parts, text=name_text, anchor="w", fg_color="transparent",
                     hover=not part.lower() == "no matching items",
                     command=lambda index=i: self.list_button_select(index)
                 )

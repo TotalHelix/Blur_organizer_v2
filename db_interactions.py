@@ -1103,13 +1103,22 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
         return formatted_results
 
     # users
-    def user_search(self, search_term, filters):
+    def user_search(self, search_term, columns=None):
         """get the matching user ids to a search term"""
+
+        if not columns:
+            columns = {
+                "user_id": True,
+                "first_name": True,
+                "last_name": True,
+                "email": True
+            }
+
         # sql to search for search term
         search_sql = f"""
 SELECT user_id FROM users
 """
-        return self.search_general(search_sql, search_term, filters)
+        return self.search_general(search_sql, search_term, columns)
 
     def user_data(self, target_id, raw=False):
         """get the user information for a user id"""
