@@ -825,6 +825,9 @@ Please click "Add part" to add a part for the first time"""
         """update the row in the parts table with the new date for the part"""
         # convert the mfr if a name is given instead of an id
         if isinstance(mfr, str) and not mfr.isnumeric():
+
+            placement = placement.UPPER()
+
             new_mfr = self.mfr_id_from_name(mfr)
             # if the new manufacturer isn't in the database
             if not new_mfr:
@@ -840,7 +843,7 @@ Please click "Add part" to add a part for the first time"""
         if matches: return "This part placement is already in use"
 
         # do the update
-        update_sql = f"UPDATE parts SET (part_placement, mfr_pn, part_mfr, part_desc) = ('{placement}', '{mfr_pn}', {mfr}, '{desc}') WHERE part_upc = {part_number}"
+        update_sql = f"UPDATE parts SET (part_placement, mfr_pn, part_mfr, part_desc, qty) = ('{placement}', '{mfr_pn}', {mfr}, '{desc}', {qty}) WHERE part_upc = {part_number}"
         self.cursor.execute(update_sql)
 
     def placement_taken(self, placement):
@@ -1002,7 +1005,7 @@ WHERE checked_out_part = {part_id}"""
         get_info_func = getattr(self, keyword + "_data")
         return get_info_func(search_key)
 
-    def update_part_qty(self, mfr_name):
+    def update_mfr_part_count(self, mfr_name):
         """update the number of parts for the mfr"""
 
         # get the mfr_id
@@ -1214,7 +1217,7 @@ SELECT mfr_id FROM manufacturers
         """get the part information for a upc code"""
 
         # first off, update the checked out parts for the mfr
-        self.update_part_qty(target_name)
+        self.update_mfr_part_count(target_name)
 
         # sql to search for search term
         search_sql = f"""

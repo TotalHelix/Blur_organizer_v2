@@ -1,3 +1,6 @@
+import os
+import sys
+
 import customtkinter as ctk
 from PIL import ImageFont
 from db_interactions import Organizer
@@ -89,6 +92,18 @@ def max_length(text, length):
     return len(text) <= length
 
 
+def handle_exceptions(func):
+    """wrapper for error handling, relies on self.popup_msg so only use in MainWindow."""
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as er:
+
+            args[0].popup_msg(str(er))
+            raise er
+    return wrapper
+
+
 class MainWindow:
     """The whole window that does all of everything"""
     def __init__(self):
@@ -100,13 +115,14 @@ class MainWindow:
         self.window.resizable(False, False)
         self.window.title("Blur Part Organizer")
         self.popup_counter = 0
+        self.form_mode_add = True
 
         # for interactions with the database
         self.controller = None
         self.postgres_exists = False
         self.connection = False
         try:
-            with Organizer("postgres") as postgres:
+            with Organizer("postgres") as _:
                 # we were able to access postgres
                 self.postgres_exists = True
 
@@ -114,8 +130,8 @@ class MainWindow:
             self.controller = Organizer("customer")
 
             self.connection = True
-        except p2er.OperationalError as errormsg:
-            print(errormsg)
+        except p2er.OperationalError as error_msg:
+            print(error_msg)
             self.connection = False
 
         # left column
@@ -231,9 +247,9 @@ class MainWindow:
         button_form = {"master": thin_frame, "width": 100, "height": 32}
         button_pack = {"side": "left", "padx": 10}
         #                                                                       has to ba lambda bc the new part form doesn't exist yet
-        ctk.CTkButton(**button_form, text="+ Add", command=lambda: self.new_part_form.tkraise()).pack(**button_pack)
+        ctk.CTkButton(**button_form, text="+ Add", command=self.add_part_form).pack(**button_pack)
         ctk.CTkButton(**button_form, text="️🗑 Delete", command=self.remove_part).pack(**button_pack)
-        ctk.CTkButton(**button_form, text="🖉 Edit", command=self.edit_part).pack(**button_pack)
+        ctk.CTkButton(**button_form, text="🖉 Edit", command=self.edit_part_form).pack(**button_pack)
 
         # right side (display part info)
         part_info_display_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", width=350)
@@ -267,11 +283,12 @@ class MainWindow:
             # make a new entry box with the key
             validate_cmd = self.new_part_form.register(lambda e, l=length: max_length(e, l))
             question_entry = ctk.CTkEntry(self.new_part_form, width=300, validate="key", validatecommand=(validate_cmd, "%P"))
+            question_entry.bind("<FocusIn>", lambda *_, q=question_entry: q.configure(border_color="#565b5e"))
             question_entry.pack()
             self.add_part_entries.append(question_entry)
 
         # submit button
-        ctk.CTkButton(self.new_part_form, text="Submit", command=self.submit_new_part).pack(pady=20)
+        ctk.CTkButton(self.new_part_form, text="Submit", command=self.submit_controller).pack(pady=20)
 
         #######################
         # error message popup
@@ -329,9 +346,19 @@ class MainWindow:
                 label = ctk.CTkLabel(self.home_frame, text=label_text, font=("Arial", info[1], "bold"), justify="left")
                 label.pack(pady=10, padx=40, anchor="w")
 
-    def edit_part(self):
-        pass
+    @handle_exceptions
+    def add_part_form(self):
+        """add a new part to the database"""
+        self.form_mode_add = True  # set the form to add mode and not edit mode
+        self.new_part_form.tkraise()
 
+    @handle_exceptions
+    def edit_part_form(self):
+        """edit the information on the selected part"""
+        self.form_mode_add = False  # set the form to edit mode and not add mode
+        self.new_part_form.tkraise()
+
+    @handle_exceptions
     def remove_part(self):
         """delete the selected part"""
         part_upc = self.selected_part.cget("text")
@@ -340,15 +367,35 @@ class MainWindow:
 
         self.popup_msg("Deleted part "+part_upc, popup_type="success")
 
-    def submit_new_part(self):
-        # submits the fields in the forms
-        fields = [entry.get() for entry in self.add_part_entries]
-        try:
-            results = self.controller.add_part(fields[3], *fields[:3], fields[4])
-            print(results)
-        except p2er.UniqueViolation:
-            self.popup_msg("this placement already exists! to change the quantity of a part, select edit from the \"find a part\" tab.")
+    @handle_exceptions
+    def submit_controller(self):
+        """either updates or adds a new part depending on the submit mode"""
+        # get the fields
+        fields = []
 
+        for item in self.add_part_entries:
+            field_text = item.get()
+
+            fields.append(field_text)
+            if item.get() == "":
+                item.configure(border_color=red)
+
+        if "" in fields:
+            self.popup_msg("You have empty fields!")
+            return
+
+        # new part mode
+        if self.form_mode_add:
+            try:
+                self.controller.add_part(fields[3], *fields[:3], fields[4])
+            except p2er.UniqueViolation:
+                self.popup_msg("this placement already exists! to change the quantity of a part, select edit from the \"find a part\" tab.")
+        else:
+            selected_part_upc = self.selected_part.cget("text")
+            print(fields)
+            self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], qty=fields[4])
+
+    @handle_exceptions
     def reconnect_db(self):
         # make a connection to the database
         try:
@@ -358,6 +405,7 @@ class MainWindow:
             # raise er
             self.popup_msg(er)
 
+    @handle_exceptions
     def forget_popup(self, popup_id):
         print(popup_id)
         print(self.popup_counter)
@@ -365,6 +413,7 @@ class MainWindow:
             self.popup_window.place_forget()
             print("forgot")
 
+    @handle_exceptions
     def popup_msg(self, error_text, popup_type="error"):
         self.popup_counter += 1
         popup_id = self.popup_counter
@@ -384,6 +433,7 @@ class MainWindow:
         if popup_type == "success":
             self.window.after(2000, self.forget_popup, popup_id)
 
+    @handle_exceptions
     def check_db_connection(self, accept_postgres=False):
         if self.connection:
             return True
@@ -398,6 +448,7 @@ class MainWindow:
             self.popup_msg("We couldn't find a database to connect to. Make sure that postgreSQL is installed.")
             return False
 
+    @handle_exceptions
     def format_database(self):
         # make sure that we are able to connect to the database
         if not self.check_db_connection(accept_postgres=True): return
@@ -414,6 +465,7 @@ class MainWindow:
         finally:
             self.reconnect_db()
 
+    @handle_exceptions
     def populate_database(self):
         # make sure that we are able to connect to the database
         if not self.check_db_connection(accept_postgres=True): return
@@ -432,35 +484,40 @@ class MainWindow:
 
         print(self.checkin_barcode.get())
 
+    @handle_exceptions
     def clear_part_results(self):
         # clear the scrolling frame that contains all the parts
         for pwidget in self.part_widgets:
             pwidget.pack_forget()
         self.part_widgets = []
 
+    @handle_exceptions
+    def raise_find_part(self):
+        """clear the search box and raise 'find a part'"""
+
+
+    @handle_exceptions
     def update_search(self, *_):
         # update the search scrollable frame to show new results
-        try:
-            active = self.check_db_connection()
-            self.find_part.tkraise()
+        active = self.check_db_connection()
+        self.find_part.tkraise()
 
-            if active:
-                search = self.search_box.get()
-                parts = self.controller.part_search(search)
+        if active:
+            search = self.search_box.get()
+            parts = self.controller.part_search(search)
 
-                # add the parts into the scrolling frame
-                self.clear_part_results()
-                for i, part in enumerate(parts):
-                    part_widget = ctk.CTkButton(
-                        self.result_parts, text=str(part), anchor="w", fg_color="transparent",
-                        hover=not part.lower() == "no matching items",
-                        command=lambda index=i: self.list_button_select(index)
-                    )
-                    part_widget.pack(fill="x", expand=True)
-                    self.part_widgets.append(part_widget)
-        except Exception as er:
-            self.popup_msg(str(er))
+            # add the parts into the scrolling frame
+            self.clear_part_results()
+            for i, part in enumerate(parts):
+                part_widget = ctk.CTkButton(
+                    self.result_parts, text=str(part), anchor="w", fg_color="transparent",
+                    hover=not part.lower() == "no matching items",
+                    command=lambda index=i: self.list_button_select(index)
+                )
+                part_widget.pack(fill="x", expand=True)
+                self.part_widgets.append(part_widget)
 
+    @handle_exceptions
     def list_button_select(self, button_index):
         # select the targeted part and update the results accordingly
         button = self.part_widgets[button_index]
