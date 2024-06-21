@@ -2,6 +2,16 @@
 
 to begin, select one of the sections on the left side of the window.
 
-### To add a part
+### Adding a part
 
-To add a part, simply go to the form that doesn't exist yet and fill it out (duh). To be honest I just need some text to throw into the home page this is also a test to make sure that this doesn't go off the page if it gets too long.
+To add a part, go to the `Part Search` tab, and click on the `+ Add` button below the     
+search box. Fill out the form according to the part that you want to add, and then click
+`Submit`.
+
+### Finding a part or user
+
+If you are looking for a part, the search box in `Part Search` can search by UPC, description,
+manufacturer, manufacturer's part number, or placement location.
+
+If you're looking for a user, the search in `User Search` can find by either user id, name, 
+or email.

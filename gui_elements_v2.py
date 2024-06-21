@@ -2,6 +2,7 @@ import customtkinter as ctk
 from PIL import ImageFont
 from db_interactions import Organizer
 import psycopg2.errors as p2er
+import re
 
 # theme stuff
 ctk.set_appearance_mode("dark")
@@ -31,6 +32,11 @@ def margin(master):
 
 def width_splice(text, font_size, max_width=650):
     """break text after a certain number of pixels in a font"""
+
+    # just skip if there's not any text
+    if text.isspace():
+        return " "
+
     font = ImageFont.truetype("arial.ttf", font_size)
     words = text.split(" ")
     lines = []
@@ -328,7 +334,11 @@ class MainWindow:
 
         # include the readme (still part of home)
         with open("README.md", "r") as readme:
-            for line in readme.readlines():
+            document = "\n".join([s.rstrip() for s in readme.readlines()]).split("\n"*2)
+            print(document)
+
+            for line in document:
+                line = line.replace("\n", " ")
 
                 # skip blank lines
                 if not line or line.isspace():
@@ -344,10 +354,30 @@ class MainWindow:
                     info = [4, 18]
 
                 # remove junk
-                label_text = width_splice(line[info[0]:].strip(), info[1])
+                label_text = line[info[0]:]  # .strip()
 
-                label = ctk.CTkLabel(self.home_frame, text=label_text, font=("Arial", info[1], "bold"), justify="left")
-                label.pack(pady=10, padx=40, anchor="w")
+                paragraph_frame = ctk.CTkFrame(self.home_frame, fg_color="transparent")
+                paragraph_frame.pack(pady=10, anchor="w")
+
+                for label_line in width_splice(label_text, info[1]).split("\n"):
+                    # inline/quotebox formatting
+                    # Split the line based on backticks
+                    segments = re.split(r'(`[^`]+`)', label_line)
+                    line_frame = ctk.CTkFrame(paragraph_frame, fg_color="transparent")
+                    line_frame.pack(padx=40, anchor="w")
+
+                    for segment in segments:
+                        if segment.startswith('`') and segment.endswith('`'):
+                            # Remove backticks and format as a quote box
+                            formatted_text = segment[1:-1]
+                            label = ctk.CTkLabel(line_frame, text=width_splice(formatted_text, info[1]),
+                                                 fg_color="#414243", corner_radius=5, font=("cascadia mono", info[1]))
+                        else:
+                            # Normal text
+                            label = ctk.CTkLabel(line_frame, text=width_splice(segment, info[1]),
+                                                 font=("Arial", info[1]))
+
+                        label.pack(side="left", padx=2)
 
     @handle_exceptions
     def add_part_form(self):
