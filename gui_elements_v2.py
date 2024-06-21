@@ -9,6 +9,8 @@ red = "#d62c20"
 green = "#32a852"
 hover_red = "#781610"
 
+# TODO at some point: make the results screen have nice buttons that let you jump to references
+
 
 # Validation function to allow only digits
 def validate_upc(new_value):
@@ -518,7 +520,7 @@ class MainWindow:
     @handle_exceptions
     def raise_search(self, search_type):
         """clear the search box and raise 'find a part'"""
-        if search_type not in ["user", "part"]: raise Exception("Invalid search type. Must be either 'user' or 'part'.")
+        if search_type not in ["user", "part"]: raise Exception("Invalid search type. Must be either 'user' or 'part'. This is a program issue, not a user issue.")
         self.search_mode = search_type
         self.find_part.tkraise()
         self.search_box.delete("0", "end")
@@ -527,41 +529,40 @@ class MainWindow:
 
     @handle_exceptions
     def update_search(self, *_):
-        # update the search scrollable frame to show new results
+        """update the search scrollable frame to show new results"""
         active = self.check_db_connection()
-        # self.find_part.tkraise()
+        self.clear_part_results()
 
         if active:
             search = self.search_box.get()
             if self.search_mode == "part":
                 parts = self.controller.part_search(search)
+                names_dict = {part: part for part in parts}
             elif self.search_mode == "user":
-                parts = self.controller.user_search(search)
+                names_dict = self.controller.user_search(search, use_full_names=True)
+                parts = names_dict.keys()
             else:
                 raise Exception("the search mode is not set to either part or user.")
 
             # add the parts into the scrolling frame
-            self.clear_part_results()
-            for i, part in enumerate(parts):
-                if self.search_mode == "part":
-                    name_text = str(part)
-                else:
-                    name_text = ""
+            for index, part in enumerate(parts):
+                name_text = str(names_dict[part])
 
                 part_widget = ctk.CTkButton(
                     self.result_parts, text=name_text, anchor="w", fg_color="transparent",
                     hover=not part.lower() == "no matching items",
-                    command=lambda index=i: self.list_button_select(index)
+                    command=lambda i=index, p=str(part): self.list_button_select(i, p)
                 )
                 part_widget.pack(fill="x", expand=True)
                 self.part_widgets.append(part_widget)
 
     @handle_exceptions
-    def list_button_select(self, button_index):
+    def list_button_select(self, button_index, key):
         # select the targeted part and update the results accordingly
         button = self.part_widgets[button_index]
 
-        if button.cget("text").lower() == "no matching items":
+        #  button.cget("text").lower()
+        if key.lower() == "no matching items":
             return
 
         # un-highlight the old selection
@@ -573,7 +574,14 @@ class MainWindow:
         self.selected_part = button
 
         # get the info for the selected part
-        part_info = self.controller.part_data(button.cget("text"))
+        if self.search_mode == "part":
+            part_info = self.controller.part_data(key)
+        else:
+            part_info = self.controller.user_data(key)
+            if len(part_info["Parts checked out"]) < 1:
+                part_info["Parts checked out"] = "None"
+            else:
+                part_info["Parts checked out"] = "\n" + "\n".join([f"{part} on {date}" for part, date in part_info["Parts checked out"]])
 
         # display the part info
         self.part_generic_info.configure(text="")

@@ -954,7 +954,7 @@ WHERE checked_out_part = {part_id}"""
         # return the userid
         return full_id
 
-    def search_general(self, search_sql, search_term, filters):
+    def search_general(self, search_sql, search_term, filters, raw_table=False):
         """general search function that all the other search functions are built off of"""
         # add each filter if it exists
         # filters in order: "DESC", "MFR", "MFR_PN", "LOC"
@@ -978,6 +978,7 @@ WHERE checked_out_part = {part_id}"""
                 # finish off the line
                 search_sql += f" as varchar)) LIKE '%{search_term.lower()}%'\n"
 
+        print(search_sql)
         self.cursor.execute(search_sql)
         search_results = self.cursor.fetchall()
 
@@ -987,7 +988,9 @@ WHERE checked_out_part = {part_id}"""
         # if there are no results
         if len(formatted_results) <= 0 or connector == "WHERE":
             formatted_results = ["No matching items"]
+            search_results = [["No matching items", "No matching items"]]
 
+        if raw_table: return search_results
         return formatted_results
 
     def search_for(self, keyword, search_key):
@@ -1103,7 +1106,7 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
         return formatted_results
 
     # users
-    def user_search(self, search_term, columns=None):
+    def user_search(self, search_term, columns=None, use_full_names=False):
         """get the matching user ids to a search term"""
 
         if not columns:
@@ -1116,9 +1119,14 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
 
         # sql to search for search term
         search_sql = f"""
-SELECT user_id FROM users
+SELECT user_id, first_name, last_name FROM users
 """
-        return self.search_general(search_sql, search_term, columns)
+
+        results_table = self.search_general(search_sql, search_term, columns, raw_table=True)
+        results_dict = {row[0]: " ".join(row[1:]) for row in results_table}
+
+        if use_full_names: return results_dict
+        else: return results_dict.keys()
 
     def user_data(self, target_id, raw=False):
         """get the user information for a user id"""
@@ -1136,9 +1144,9 @@ WHERE user_id = '{target_id}'"""
             return {"No results": ""}
 
         # get the number of parts checked out by the user
-        checkout_search = f"SELECT * FROM part_locations WHERE current_holder = '{target_id}'"
+        checkout_search = f"SELECT checked_out_part, checkout_timestamp FROM part_locations WHERE current_holder = '{target_id}'"
         self.cursor.execute(checkout_search)
-        parts_out = len(self.cursor.fetchall())
+        parts_out = [[part, time.strftime("%d %b, %Y - %I:%M %p")] for part, time in self.cursor.fetchall()]
 
         # if the program wants raw data and not a nice table
         if raw:
@@ -1147,9 +1155,9 @@ WHERE user_id = '{target_id}'"""
             # change the table into a dictionary
             formatted_results = {
                 "User ID": search_results[0],
-                "Full name": search_results[1] + " " + search_results[2],
+                "Name": search_results[1] + " " + search_results[2],
                 "Email": search_results[3],
-                "Current checkouts": parts_out
+                "Parts checked out": parts_out
             }
 
             return formatted_results
