@@ -123,6 +123,7 @@ class MainWindow:
         self.popup_counter = 0
         self.form_mode_add = True
         self.search_mode = "part"
+        self.selected_part_key = ""
 
         # for interactions with the database
         self.controller = None
@@ -256,7 +257,7 @@ class MainWindow:
         button_form = {"master": thin_frame, "width": 100, "height": 32}
         button_pack = {"side": "left", "padx": 10}
         #                                                                       has to ba lambda bc the new part form doesn't exist yet
-        ctk.CTkButton(**button_form, text="+ Add", command=self.add_part_form).pack(**button_pack)
+        ctk.CTkButton(**button_form, text="+ Add", command=self.add_part).pack(**button_pack)
         ctk.CTkButton(**button_form, text="️🗑 Delete", command=self.remove_part).pack(**button_pack)
         ctk.CTkButton(**button_form, text="🖉 Edit", command=self.edit_part_form).pack(**button_pack)
 
@@ -270,34 +271,24 @@ class MainWindow:
         #######################
         # add new part form
         #######################
-        self.new_part_form = ctk.CTkFrame(self.workspace)
-        self.new_part_form.grid(row=0, column=0, sticky="news")
-
-        # back button
-        ctk.CTkButton(self.new_part_form, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=lambda: self.raise_search("user")).pack(fill="x", padx=40, pady=20)
-
-        # main question fields
-        questions = {
+        part_questions = {
             "Manufacturer": 255,
-            "Manufacturer's Part Number": 255,
+            "Manufacturer's part number": 255,
             "Placement location": 10,
             "Description": 0,
             "Quantity": "int"
         }
+
+        user_questions = {
+            "First name": 50,
+            "Last name": 50,
+            "Email": 255
+        }
+
         self.add_part_entries = {}
-        for question, length in questions.items():
-            # make a description text
-            ctk.CTkLabel(self.new_part_form, text="\n"+question, font=("Ariel", 16)).pack()
-
-            # make a new entry box with the key
-            validate_cmd = self.new_part_form.register(lambda e, l=length: max_length_validate(e, l))
-            question_entry = ctk.CTkEntry(self.new_part_form, width=300, validate="key", validatecommand=(validate_cmd, "%P"))
-            question_entry.bind("<FocusIn>", lambda *_, q=question_entry: q.configure(border_color="#565b5e"))
-            question_entry.pack()
-            self.add_part_entries[question] = question_entry
-
-        # submit button
-        ctk.CTkButton(self.new_part_form, text="Submit", command=self.submit_controller).pack(pady=20)
+        self.add_user_entries = {}
+        self.new_part_form = self.make_new_form(part_questions, self.add_part_entries)
+        self.new_user_form = self.make_new_form(user_questions, self.add_user_entries)
 
         #######################
         # error message popup
@@ -380,13 +371,47 @@ class MainWindow:
                         label.pack(side="left", padx=2)
 
     @handle_exceptions
-    def add_part_form(self):
+    def make_new_form(self, questions_dict, entries_storing_variable):
+        """makes a new form from a question dictionary"""
+        new_form = ctk.CTkFrame(self.workspace)
+        new_form.grid(row=0, column=0, sticky="news")
+
+        # back button
+        ctk.CTkButton(new_form, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=lambda: self.raise_search("user")).pack(fill="x", padx=40, pady=20)
+
+        # main question fields
+        for question, length in questions_dict.items():
+            # make a description text
+            ctk.CTkLabel(new_form, text="\n"+question, font=("Ariel", 16)).pack()
+
+            # make a new entry box with the key
+            validate_cmd = new_form.register(lambda e, l=length: max_length_validate(e, l))
+            question_entry = ctk.CTkEntry(new_form, width=300, validate="key", validatecommand=(validate_cmd, "%P"))
+
+            command = lambda *_, q=question_entry: q.configure(border_color="#565b5e")
+            question_entry.bind("<FocusIn>", command)
+            question_entry.bind("<Key>", command)
+            question_entry.pack()
+            entries_storing_variable[question] = question_entry
+
+        # submit button
+        ctk.CTkButton(new_form, text="Submit", command=self.submit_controller).pack(pady=20)
+
+        return new_form
+
+    @handle_exceptions
+    def add_part(self):
         """add a new part to the database"""
         self.form_mode_add = True  # set the form to add mode and not edit mode
-        self.new_part_form.tkraise()
+        if self.search_mode == "part":
+            self.new_part_form.tkraise()
+        else:
+            self.new_user_form.tkraise()
 
-        for name, entry in self.add_part_entries.items():
+        for name, entry in (self.add_part_entries | self.add_user_entries).items():
+
             entry.delete(0, "end")
+            entry.configure(border_color="#565b5e")
 
     @handle_exceptions
     def edit_part_form(self):
@@ -396,24 +421,30 @@ class MainWindow:
             return
 
         self.form_mode_add = False  # set the form to edit mode and not add mode
-        self.new_part_form.tkraise()
 
-        current_upc = self.selected_part.cget("text")
-        data = self.controller.part_data(current_upc)
+        data = self.controller.part_data(self.selected_part_key)
         print(data)
 
-        for name, entry in self.add_part_entries.items():
-            entry.delete(0, "end")
-            entry.insert(0, data[name])
+        if self.search_mode == "part":
+            self.new_part_form.tkraise()
+            for name, entry in self.add_part_entries.items():
+                entry.delete(0, "end")
+                entry.insert(0, data[name])
+
+        else:
+            self.new_user_form.tkraise()
+            for name, entry in self.add_user_entries.items():
+                entry.delete(0, "end")
+                entry.insert(0, data[name])
 
     @handle_exceptions
     def remove_part(self):
         """delete the selected part"""
-        part_upc = self.selected_part.cget("text")
-        self.controller.delete_generic(part_upc, "part")
+        print(self.selected_part_key)
+        self.controller.delete_generic(self.selected_part_key, self.search_mode)
         self.update_search()
 
-        self.popup_msg("Deleted part "+part_upc, popup_type="success")
+        self.popup_msg(f"Deleted {self.search_mode} {self.selected_part.cget('text')}", popup_type="success")
 
     @handle_exceptions
     def submit_controller(self):
@@ -421,7 +452,12 @@ class MainWindow:
         # get the fields
         fields = []
 
-        for item in self.add_part_entries.values():
+        if self.search_mode == "part":
+            entries = self.add_part_entries
+        else:
+            entries = self.add_user_entries
+
+        for item in entries.values():
             field_text = item.get()
 
             fields.append(field_text)
@@ -435,18 +471,36 @@ class MainWindow:
         # new part mode
         if self.form_mode_add:
             try:
-                self.controller.add_part(fields[3], *fields[:3], fields[4])
+                if self.search_mode == "part":
+                    new_key = self.controller.add_part(fields[3], *fields[:3], fields[4])
+                else:
+                    new_key = self.controller.add_user(*fields)
+
+                    if new_key == "-EMAIL_ALREADY_TAKEN-":
+                        self.popup_msg("This email is already in use!")
+                        self.add_user_entries["Email"].configure(border_color=red)
+                        return
+                    elif new_key == "-NAME_ALREADY_TAKEN-":
+                        self.popup_msg("This name is already in use")
+                        self.add_user_entries["First name"].configure(border_color=red)
+                        self.add_user_entries["Last name"].configure(border_color=red)
+                        return
             except p2er.UniqueViolation:
                 self.popup_msg("this placement already exists! to change the quantity of a part, select edit from the \"find a part\" tab.")
+                return
         else:
             selected_part_upc = self.selected_part.cget("text")
             print(fields)
             self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], qty=fields[4])
 
-        # go back to the select screen
-        index_list = [(self.selected_part.cget("text") == part_widget.cget("text")) for part_widget in self.part_widgets]
-        part_index = index_list.index(True)
-        self.list_button_select(part_index)
+        # go back to the select screen  TODO    this reselect old part thing doesn't work
+        #                               TODO    it's just aesthetic though so it doesn't really matter
+        # print(self.selected_part)
+        # if self.selected_part:
+        #     index_list = [(self.selected_part.cget("text") == part_widget.cget("text")) for part_widget in self.part_widgets]
+        #     if True in index_list:
+        #         part_index = index_list.index(True)
+        #         self.list_button_select(part_index, new_key)
 
         self.raise_search(self.search_mode)
 
@@ -587,27 +641,25 @@ class MainWindow:
                 self.part_widgets.append(part_widget)
 
     @handle_exceptions
-    def list_button_select(self, button_index, key):
+    def list_button_select(self, button_index, database_key=None):
         # select the targeted part and update the results accordingly
         button = self.part_widgets[button_index]
 
-        #  button.cget("text").lower()
-        if key.lower() == "no matching items":
+        if not database_key:
+            key = button.cget("text").lower()
+
+        if database_key.lower() == "no matching items":
             return
 
         # un-highlight the old selection
         if self.selected_part:
             self.selected_part.configure(fg_color="transparent")
 
-        # highlight the selected item
-        button.configure(fg_color="#1f6ba5")
-        self.selected_part = button
-
         # get the info for the selected part
         if self.search_mode == "part":
-            part_info = self.controller.part_data(key)
+            part_info = self.controller.part_data(database_key)
         else:
-            part_info = self.controller.user_data(key)
+            part_info = self.controller.user_data(database_key)
             if len(part_info["Parts checked out"]) < 1:
                 part_info["Parts checked out"] = "None"
             else:
@@ -625,3 +677,9 @@ class MainWindow:
 
         new_text = width_splice(new_text, 16, 400)
         self.part_generic_info.configure(text=new_text)
+
+        # finally, highlight the selected item in the scrolling frame
+        button.configure(fg_color="#1f6ba5")
+        self.selected_part = button
+        print(database_key)
+        self.selected_part_key = database_key
