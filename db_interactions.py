@@ -345,6 +345,9 @@ class Organizer:
 
     def update_user(self, old_id, fname, lname, email):
         """update the user account so that it has the new information"""
+        # capitalize your name!
+        fname = fname.title()
+        lname = lname.title()
 
         # block existing emails
         email_matches = f"SELECT user_id FROM users WHERE email = '{email}'"
@@ -358,10 +361,12 @@ class Organizer:
         matching_names = [row for row in self.cursor.fetchall() if row[0] != fname]
         if matching_names: return "-NAME_ALREADY_TAKEN-"
 
-        # I was going to have this change the userid as well but that was more complicated than expected
+        # I was going to have this change the userid as well but that was more complicated than expected, as thew userid is a primary key
         update_sql = f"UPDATE users SET (first_name, last_name, email) = ('{fname}', '{lname}', '{email}') WHERE user_id = '{old_id}'"
+        print(update_sql)
         self.cursor.execute(update_sql)
         self.conn.commit()
+
 
     def rename_mfr(self, mfr_id, new_name):
         """rename the mfr with id mfr_id to new_name"""
@@ -1155,7 +1160,7 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
             "UPC code": str(search_results[0]).zfill(12),
             "Placement location": search_results[1],
             "Manufacturer": search_results[2],
-            "Manufacturer's Part Number": mfr_pn,
+            "Manufacturer's part number": mfr_pn,
             "Currently checked out by": checkout_holder,
             "Quantity": search_results[5],
             "Description": search_results[4]
@@ -1216,7 +1221,8 @@ WHERE user_id = '{target_id}'"""
             # change the table into a dictionary
             formatted_results = {
                 "User ID": search_results[0],
-                "Name": search_results[1] + " " + search_results[2],
+                "First name": search_results[1],
+                "Last name": search_results[2],
                 "Email": search_results[3],
                 "Parts checked out": parts_out
             }

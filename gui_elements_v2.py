@@ -91,7 +91,6 @@ def stackable_frame(master, title, desc, button_text, command):
 
 def max_length_validate(text, length):
     """max length for input validation"""
-    print(f"length {length} is a {type(length)}")
     if text == "": return True
     if length == "int": return text.isdigit()
     if length == 0: return True
@@ -150,8 +149,8 @@ class MainWindow:
             "Home": lambda: self.home_frame.tkraise(),
             "Check Out": lambda: self.checkout_frame.tkraise(),
             "Check In": lambda: self.checkin_frame.tkraise(),
-            "Search Parts": lambda: self.raise_search("part"),
-            "Search Users": lambda: self.raise_search("user")
+            "Part Search": lambda: self.raise_search("part"),
+            "User Search": lambda: self.raise_search("user")
         }
         for button_name, cmd in side_buttons.items():
             button = ctk.CTkButton(l_col, text=button_name, command=cmd)
@@ -326,7 +325,6 @@ class MainWindow:
         # include the readme (still part of home)
         with open("README.md", "r") as readme:
             document = "\n".join([s.rstrip() for s in readme.readlines()]).split("\n"*2)
-            print(document)
 
             for line in document:
                 line = line.replace("\n", " ")
@@ -422,16 +420,17 @@ class MainWindow:
 
         self.form_mode_add = False  # set the form to edit mode and not add mode
 
-        data = self.controller.part_data(self.selected_part_key)
-        print(data)
-
         if self.search_mode == "part":
+            data = self.controller.part_data(self.selected_part_key)
             self.new_part_form.tkraise()
+            print(data.keys())
             for name, entry in self.add_part_entries.items():
+                print(name)
                 entry.delete(0, "end")
                 entry.insert(0, data[name])
 
         else:
+            data = self.controller.user_data(self.selected_part_key)
             self.new_user_form.tkraise()
             for name, entry in self.add_user_entries.items():
                 entry.delete(0, "end")
@@ -440,7 +439,6 @@ class MainWindow:
     @handle_exceptions
     def remove_part(self):
         """delete the selected part"""
-        print(self.selected_part_key)
         self.controller.delete_generic(self.selected_part_key, self.search_mode)
         self.update_search()
 
@@ -489,9 +487,20 @@ class MainWindow:
                 self.popup_msg("this placement already exists! to change the quantity of a part, select edit from the \"find a part\" tab.")
                 return
         else:
-            selected_part_upc = self.selected_part.cget("text")
-            print(fields)
-            self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], qty=fields[4])
+            if self.search_mode == "part":
+                selected_part_upc = self.selected_part.cget("text")
+                self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], qty=fields[4])
+            elif self.search_mode == "user":
+                result = self.controller.update_user(self.selected_part_key, *fields[0:3])
+
+                # if the database says that you can't do that
+                if result == "-NAME_ALREADY_TAKEN-":
+                    self.popup_msg("This name is already in use.")
+                    return
+                elif result == "-EMAIL_ALREADY_TAKEN-":
+                    self.popup_msg("This email is already in use.")
+                    return
+                else:self.upda
 
         # go back to the select screen  TODO    this reselect old part thing doesn't work
         #                               TODO    it's just aesthetic though so it doesn't really matter
@@ -539,6 +548,10 @@ class MainWindow:
         self.popup_window.place(**self.popup_pos)
         self.popup_window.tkraise()
 
+        # bring the window to the top after other movement of gui from whatever caused the error
+        self.window.after(5, self.popup_window.tkraise)
+
+        # success messages hide themselves after 2 seconds
         if popup_type == "success":
             self.window.after(2000, self.forget_popup, popup_id)
 
@@ -644,9 +657,6 @@ class MainWindow:
     def list_button_select(self, button_index, database_key=None):
         # select the targeted part and update the results accordingly
         button = self.part_widgets[button_index]
-
-        if not database_key:
-            key = button.cget("text").lower()
 
         if database_key.lower() == "no matching items":
             return
