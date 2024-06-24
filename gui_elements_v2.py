@@ -260,6 +260,7 @@ class MainWindow:
         long_frame.pack(pady=15)
 
         # search box in the user select frame
+        self.reverse_users = {}
         self.checkout_user_search = ctk.CTkEntry(long_frame, placeholder_text="Search", width=200)
         self.checkout_user_search.pack(side="left")
         self.checkout_user_search.bind("<Key>", self.update_user_select_options)
@@ -270,7 +271,7 @@ class MainWindow:
         self.checkout_user_dropdown.pack(side="left")
 
         # check out button (not a trick like the 'go' button)
-        self.checkout_finalize = ctk.CTkButton(self.checkout_user_frame, text="Check Out")
+        self.checkout_finalize = ctk.CTkButton(self.checkout_user_frame, text="Check Out", command=self.checkout_finalize)
         self.checkout_finalize.pack()
 
         ###################
@@ -434,11 +435,26 @@ class MainWindow:
         """in the checkout frame, get the info from the entry box and use it to search for users, and then add them to the dropdown"""
         search_term = self.checkout_user_search.get()
         users = self.controller.user_search(search_term, use_full_names=True)
-        reverse_users = {data: uid for uid, data in users.items()}
-        names_list = list(reverse_users.keys())
+        self.reverse_users = {data: uid for uid, data in users.items()}
+        names_list = list(self.reverse_users.keys())
 
         self.checkout_user_dropdown.configure(values=names_list)
         self.checkout_selected_user.set(names_list[0])
+
+    @handle_exceptions
+    def checkout_finalize(self):
+        """take the upc and user id and check out the part."""
+        user = self.checkout_selected_user.get()
+
+        if user not in self.reverse_users.keys():
+            self.popup_msg("please select a valid user.")
+            return
+
+        uid = self.reverse_users[user]
+        upc = self.checkout_barcode.get()
+
+        self.controller.part_checkout(upc, uid)
+
 
     @handle_exceptions
     def make_new_form(self, questions_dict, entries_storing_variable):
@@ -693,9 +709,8 @@ class MainWindow:
 
         upc = self.checkout_barcode.get()
 
-        print(len(upc))
-        if len(upc) != 12:
-            self.popup_msg("Invalid UPC code: not enough characters!")
+        if not self.controller.upc_exists(upc):
+            self.popup_msg("UPC code not found in database")
             return
 
         self.checkout_user_frame.tkraise()

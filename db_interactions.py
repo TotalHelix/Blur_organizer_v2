@@ -157,6 +157,11 @@ class Organizer:
         self.cursor.close()
         self.conn.close()
 
+    def upc_exists(self, upc):
+        """check a upc to see if it exists in the database"""
+        self.cursor.execute(f"SELECT * FROM parts WHERE part_upc = {upc}")
+        return self.cursor.fetchall()
+
     def format_database(self):
         """set up all the tables of the database"""
 
@@ -933,9 +938,9 @@ Please click "Add part" to add a part for the first time"""
         find_part_sql = f"SELECT * FROM parts where part_upc = {part_id}"
         self.cursor.execute(find_part_sql)
 
-        if len(self.cursor.fetchall()) <= 0:
-            gui_window.confirm("This upc code does not belong to a known part")
-            return
+        # if len(self.cursor.fetchall()) <= 0:
+        #     gui_window.confirm("This upc code does not belong to a known part")
+        #     return
 
         # check if the value already exists
         search_sql = f"SELECT current_holder FROM part_locations WHERE checked_out_part = {part_id}"
