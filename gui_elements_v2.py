@@ -1,3 +1,4 @@
+import tkinter as tk
 import customtkinter as ctk
 from PIL import ImageFont
 from db_interactions import Organizer
@@ -203,14 +204,74 @@ class MainWindow:
         self.checkin_barcode.bind("<Return>", self.checkin_continue)
 
         # Go Button
-        go_button = ctk.CTkButton(input_frame, text="Go", command=self.checkin_continue)
-        go_button.pack(side="left")
+        checkin_finalize = ctk.CTkButton(input_frame, text="Go", command=self.checkin_continue)
+        checkin_finalize.pack(side="left")
 
         ###################
         # checkout
         ###################
-        self.checkout_frame = ctk.CTkFrame(self.workspace, fg_color="blue")
+        self.checkout_frame = ctk.CTkFrame(self.workspace)
         self.checkout_frame.grid(row=0, column=0, sticky="news")
+
+        margin(self.checkout_frame)
+
+        # Title Label
+        title_label = ctk.CTkLabel(self.checkout_frame, text="Check out a part", font=ctk.CTkFont(size=30, weight="bold"))
+        title_label.pack(pady=10)
+
+        # Explanation Text
+        explanation_text = ctk.CTkLabel(self.checkout_frame, text="Please scan a barcode or manually enter UPC of the part you would like to check out:", font=("Ariel", 18))
+        explanation_text.pack(pady=10)
+
+        # Register the validation function
+        validate_command = self.checkout_frame.register(validate_upc)
+
+        # Frame for Entry Field and Button
+        input_frame = ctk.CTkFrame(self.checkout_frame)
+        input_frame.pack(pady=10, padx=40, fill="x")
+
+        # Entry Field for Barcode Scanning or Manual Input
+        self.checkout_barcode = ctk.CTkEntry(
+            input_frame,
+            placeholder_text="Scan barcode or enter digits here",
+            validate="key",
+            validatecommand=(validate_command, '%P')
+        )
+        self.checkout_barcode.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        self.checkout_barcode.bind("<Return>", self.checkout_continue)
+
+        # Go Button
+        checkout_continue = ctk.CTkButton(input_frame, text="Continue", command=self.checkout_continue)
+        checkout_continue.pack(side="left")
+
+        #################
+        # checkout continue (user select)
+        #################
+        self.checkout_user_frame = ctk.CTkFrame(self.workspace)
+        self.checkout_user_frame.grid(row=0, column=0, sticky="news")
+
+        margin(self.checkout_user_frame)
+
+        # explainer text
+        ctk.CTkLabel(self.checkout_user_frame, text="Please select your account", font=("Ariel", 16)).pack(pady=10)
+
+        # frame for the search box and dropdown
+        long_frame = ctk.CTkFrame(self.checkout_user_frame, fg_color="transparent")
+        long_frame.pack(pady=15)
+
+        # search box in the user select frame
+        self.checkout_user_search = ctk.CTkEntry(long_frame, placeholder_text="Search", width=200)
+        self.checkout_user_search.pack(side="left")
+        self.checkout_user_search.bind("<Key>", self.update_user_select_options)
+
+        # dropdown of users to pick from
+        self.checkout_selected_user = tk.StringVar(value=" ")
+        self.checkout_user_dropdown = ctk.CTkOptionMenu(long_frame, values=[" "], variable=self.checkout_selected_user)
+        self.checkout_user_dropdown.pack(side="left")
+
+        # check out button (not a trick like the 'go' button)
+        self.checkout_finalize = ctk.CTkButton(self.checkout_user_frame, text="Check Out")
+        self.checkout_finalize.pack()
 
         ###################
         # danger zone
@@ -369,6 +430,17 @@ class MainWindow:
                         label.pack(side="left", padx=2)
 
     @handle_exceptions
+    def update_user_select_options(self, *_):
+        """in the checkout frame, get the info from the entry box and use it to search for users, and then add them to the dropdown"""
+        search_term = self.checkout_user_search.get()
+        users = self.controller.user_search(search_term, use_full_names=True)
+        reverse_users = {data: uid for uid, data in users.items()}
+        names_list = list(reverse_users.keys())
+
+        self.checkout_user_dropdown.configure(values=names_list)
+        self.checkout_selected_user.set(names_list[0])
+
+    @handle_exceptions
     def make_new_form(self, questions_dict, entries_storing_variable):
         """makes a new form from a question dictionary"""
         new_form = ctk.CTkFrame(self.workspace)
@@ -489,7 +561,13 @@ class MainWindow:
         else:
             if self.search_mode == "part":
                 selected_part_upc = self.selected_part.cget("text")
-                self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], qty=fields[4])
+                result = self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], qty=fields[4])
+
+                if result == "-PLACEMENT_ALREADY_TAKEN-":
+                    self.popup_msg("This placement location is already in use.")
+                    return
+                else:
+                    self.list_button_select(database_key=result)
             elif self.search_mode == "user":
                 result = self.controller.update_user(self.selected_part_key, *fields[0:3])
 
@@ -500,10 +578,11 @@ class MainWindow:
                 elif result == "-EMAIL_ALREADY_TAKEN-":
                     self.popup_msg("This email is already in use.")
                     return
-                else:self.upda
+                else:
+                    self.list_button_select(button_index=0, database_key=result)
 
-        # go back to the select screen  TODO    this reselect old part thing doesn't work
-        #                               TODO    it's just aesthetic though so it doesn't really matter
+        # go back to the select screen  TO-DO    this reselect old part thing doesn't work
+        #                               TO-DO    it's just aesthetic though, so it doesn't really matter
         # print(self.selected_part)
         # if self.selected_part:
         #     index_list = [(self.selected_part.cget("text") == part_widget.cget("text")) for part_widget in self.part_widgets]
@@ -608,6 +687,20 @@ class MainWindow:
         print(self.checkin_barcode.get())
 
     @handle_exceptions
+    def checkout_continue(self, *_):
+        # check for database connection
+        if not self.check_db_connection(): return
+
+        upc = self.checkout_barcode.get()
+
+        print(len(upc))
+        if len(upc) != 12:
+            self.popup_msg("Invalid UPC code: not enough characters!")
+            return
+
+        self.checkout_user_frame.tkraise()
+
+    @handle_exceptions
     def clear_part_results(self):
         # clear the scrolling frame that contains all the parts
         for pwidget in self.part_widgets:
@@ -654,8 +747,15 @@ class MainWindow:
                 self.part_widgets.append(part_widget)
 
     @handle_exceptions
-    def list_button_select(self, button_index, database_key=None):
-        # select the targeted part and update the results accordingly
+    def list_button_select(self, button_index=None, database_key=None):
+        """select the targeted part and update the results accordingly"""
+        if not database_key:
+            database_key = self.selected_part_key
+
+        if not button_index:
+            for i, button in enumerate(self.part_widgets):
+                if button.cget("text") == database_key:
+                    button_index = i
         button = self.part_widgets[button_index]
 
         if database_key.lower() == "no matching items":

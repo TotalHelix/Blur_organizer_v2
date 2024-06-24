@@ -117,8 +117,10 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
     except Exception as e:
         return e, *args
 
+
 def random_word():
     return lorem.sentence().split(" ")[0]
+
 
 def strip_string(string_text):
     """Remove special characters and stuff from searches so that you don't miss something because of a dot"""
@@ -363,10 +365,10 @@ class Organizer:
 
         # I was going to have this change the userid as well but that was more complicated than expected, as thew userid is a primary key
         update_sql = f"UPDATE users SET (first_name, last_name, email) = ('{fname}', '{lname}', '{email}') WHERE user_id = '{old_id}'"
-        print(update_sql)
         self.cursor.execute(update_sql)
         self.conn.commit()
 
+        return old_id
 
     def rename_mfr(self, mfr_id, new_name):
         """rename the mfr with id mfr_id to new_name"""
@@ -739,8 +741,8 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
 UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}"""
         self.cursor.execute(update_mfrs_table)
 
-        # return render_upc(upc, safe_placement, desc, printer="Zebra ")
-        return upc
+        return render_upc(upc, safe_placement, desc, printer="Zebra ")
+        # return upc
 
     def add_mfr(self, mfr_name):
         self.cursor.execute(f"INSERT INTO manufacturers VALUES (default, '{mfr_name}', 0) RETURNING mfr_id")
@@ -902,12 +904,14 @@ Please click "Add part" to add a part for the first time"""
         find_placement = f"SELECT part_upc FROM parts WHERE part_placement = '{placement}'"
         self.cursor.execute(find_placement)
 
-        matches = [result for result in self.cursor.fetchall() if result[0] == part_number]
-        if matches: return "This part placement is already in use"
+        matches = [result for result in self.cursor.fetchall() if int(result[0]) != int(part_number)]
+        if matches: return "-PLACEMENT_ALREADY_TAKEN-"
 
         # do the update
         update_sql = f"UPDATE parts SET (part_placement, mfr_pn, part_mfr, part_desc, qty) = ('{placement}', '{mfr_pn}', {mfr}, '{desc}', {qty}) WHERE part_upc = {part_number}"
+        print(update_sql)
         self.cursor.execute(update_sql)
+        self.conn.commit()
 
     def placement_taken(self, placement):
         """make sure that the placement location provided isn't already in use"""
