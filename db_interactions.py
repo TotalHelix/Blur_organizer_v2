@@ -928,11 +928,8 @@ Please click "Add part" to add a part for the first time"""
 
         return bool(results)
 
-    def part_checkout(self, part_id, user_id, gui_window):
+    def part_checkout(self, part_id, user_id, force=False):
         """add the part to the currently checked out parts table"""
-
-        # what to say if it works
-        success_message = "Part successfully checked out.\n Have a nice day."
 
         # first: check if there is a matching part
         find_part_sql = f"SELECT * FROM parts where part_upc = {part_id}"
@@ -949,19 +946,18 @@ Please click "Add part" to add a part for the first time"""
 
         # if results are found
         if len(results_table) > 0:
-
-            # tell the user that a duplicate exists
-
             # find the old userid in the users table
             old_user_sql = f"SELECT first_name, last_name FROM users WHERE user_id = '{results_table[0][0]}'"
             self.cursor.execute(old_user_sql)
             user_results = self.cursor.fetchall()
             old_holder = " ".join([user_results[0][0], user_results[0][1]])
 
-            to_update = gui_window.confirm(f"""This part is already checked out by {old_holder}.
-Would you like to transfer to yourself?""", ["Yes", "No"])
+            # tell the user that the part is already checked out
+            if not force:
+                return "-PART_HOLDER-;;"+old_holder
 
-            if to_update == "Yes":
+            # if the user has already gotten the prompt and confirmed that they would like to force check out
+            else:
                 # update the original row
                 update_sql = f"""
 UPDATE part_locations 
@@ -970,17 +966,14 @@ WHERE checked_out_part = {part_id}"""
                 self.cursor.execute(update_sql)
 
                 # have a nice day
-                gui_window.confirm(success_message)
-            else:
-                gui_window.confirm("Checkout canceled")
-                return
+                return "-CHECKOUT_SUCCESS-"
         # if no results are found
         else:
             # sql to add the row
             insert_sql = f"INSERT INTO part_locations VALUES ({part_id}, '{user_id}', CURRENT_TIMESTAMP)"
             self.cursor.execute(insert_sql)
 
-            gui_window.confirm(success_message)
+            return "-CHECKOUT_SUCCESS-"
 
     def add_user(self, f_name, l_name, email):
         """create a new user and return the userid"""

@@ -4,15 +4,16 @@ from PIL import ImageFont
 from db_interactions import Organizer
 import psycopg2.errors as p2er
 import re
+from time import sleep
 
 # theme stuff
 ctk.set_appearance_mode("dark")
 red = "#d62c20"
 green = "#32a852"
 hover_red = "#781610"
+hover_green = "#0f4f22"
 
 # TODO at some point: make the results screen have nice buttons that let you jump to references
-
 
 # Validation function to allow only digits
 def validate_upc(new_value):
@@ -124,6 +125,7 @@ class MainWindow:
         self.form_mode_add = True
         self.search_mode = "part"
         self.selected_part_key = ""
+        self.checkout_upc = ""
 
         # for interactions with the database
         self.controller = None
@@ -271,8 +273,17 @@ class MainWindow:
         self.checkout_user_dropdown.pack(side="left")
 
         # check out button (not a trick like the 'go' button)
-        self.checkout_finalize = ctk.CTkButton(self.checkout_user_frame, text="Check Out", command=self.checkout_finalize)
-        self.checkout_finalize.pack()
+        self.checkout_finalize_button = ctk.CTkButton(self.checkout_user_frame, text="Check Out", command=self.checkout_finalize)
+        self.checkout_finalize_button.pack()
+
+        # prompt for force checkout
+        self.force_prompt = ctk.CTkFrame(self.checkout_user_frame)
+        self.prompt_text = ctk.CTkLabel(self.force_prompt, text="This part is already checked out by None. checkout anyways?")
+        self.prompt_text.pack(pady=5, padx=7)
+        buttons_frame = ctk.CTkFrame(self.force_prompt, fg_color="transparent")
+        buttons_frame.pack(pady=10)
+        ctk.CTkButton(buttons_frame, text="Yes", fg_color=green, hover_color=hover_green, command=lambda: self.checkout_finalize(force=True)).pack(side="left", padx=8)
+        ctk.CTkButton(buttons_frame, text="Cancel", fg_color=red, hover_color=hover_red, command=self.checkout_frame.tkraise).pack(side="left", padx=8)
 
         ###################
         # danger zone
@@ -431,30 +442,56 @@ class MainWindow:
                         label.pack(side="left", padx=2)
 
     @handle_exceptions
-    def update_user_select_options(self, *_):
+    def update_user_select_options(self, key_event):
         """in the checkout frame, get the info from the entry box and use it to search for users, and then add them to the dropdown"""
+        # get the text from the entry box
         search_term = self.checkout_user_search.get()
+
+        # the last character hasn't registered yet, so add that from the key event
+        key = key_event.keysym
+        print(key)
+        if len(key) == 1: search_term += key
+        if key == "BackSpace": search_term = search_term[:-1]
+
+        # search for the matching users
         users = self.controller.user_search(search_term, use_full_names=True)
         self.reverse_users = {data: uid for uid, data in users.items()}
         names_list = list(self.reverse_users.keys())
 
+        # update the search accordingly
         self.checkout_user_dropdown.configure(values=names_list)
         self.checkout_selected_user.set(names_list[0])
 
     @handle_exceptions
-    def checkout_finalize(self):
+    def checkout_finalize(self, force=False):
         """take the upc and user id and check out the part."""
         user = self.checkout_selected_user.get()
 
-        if user not in self.reverse_users.keys():
+        if user not in self.reverse_users.keys() or user.lower() == "no matching items":
             self.popup_msg("please select a valid user.")
             return
 
         uid = self.reverse_users[user]
-        upc = self.checkout_barcode.get()
+        upc = self.checkout_upc
 
-        self.controller.part_checkout(upc, uid)
+        result = self.controller.part_checkout(upc, uid, force)
 
+        if result == "-CHECKOUT_SUCCESS-":
+            self.popup_msg("Part checked out successfully", "success")
+            self.checkout_frame.tkraise()
+        else:
+            # if the part is already checked out by someone else
+
+            # split into error message and part holder
+            split_result = result.split(";;")
+
+            # if the formatting doesn't make sense (if everything is working, this should never fire)
+            if (not len(split_result) >= 2) or (not split_result[0] == "-PART_HOLDER-"):
+                raise Exception("Something went wrong on our end. Try returning the part and returning to checkout.")
+
+            # tell the user that the part is already checked out, and ask if he/she wants to force checkout
+            self.prompt_text.configure(text=f"This part is already checked out by {split_result[1]}. Check out anyways?")
+            self.force_prompt.pack(pady=20)
 
     @handle_exceptions
     def make_new_form(self, questions_dict, entries_storing_variable):
@@ -713,6 +750,14 @@ class MainWindow:
             self.popup_msg("UPC code not found in database")
             return
 
+        # clear out whatever old stuff might be in this or the next panel
+        self.force_prompt.pack_forget()
+        self.checkout_user_search.delete("0", "end")
+        self.checkout_upc = self.checkout_barcode.get()
+        self.checkout_barcode.delete("0", "end")
+        self.checkout_selected_user.set(" ")
+
+        # move on to the user selection page
         self.checkout_user_frame.tkraise()
 
     @handle_exceptions
