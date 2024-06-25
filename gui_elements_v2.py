@@ -664,7 +664,7 @@ class MainWindow:
             print("forgot")
 
     @handle_exceptions
-    def popup_msg(self, error_text, popup_type="error"):
+    def popup_msg(self, error_text, popup_type="error", display_time_sec=2):
         self.popup_counter += 1
         popup_id = self.popup_counter
 
@@ -685,7 +685,7 @@ class MainWindow:
 
         # success messages hide themselves after 2 seconds
         if popup_type == "success":
-            self.window.after(2000, self.forget_popup, popup_id)
+            self.window.after(display_time_sec*1000, self.forget_popup, popup_id)
 
     @handle_exceptions
     def check_db_connection(self, accept_postgres=False):
@@ -737,7 +737,18 @@ class MainWindow:
         # check for database connection
         if not self.check_db_connection(): return
 
-        print(self.checkin_barcode.get())
+        # database checkin
+        upc = self.checkin_barcode.get()
+        result = self.controller.part_checkin(upc)
+
+        # clear the entry box
+        self.checkin_barcode.delete("0", "end")
+
+        # relay the database message
+        if "success" in result.lower():
+            self.popup_msg(result, "success", 5)
+        else:
+            self.popup_msg(result)
 
     @handle_exceptions
     def checkout_continue(self, *_):

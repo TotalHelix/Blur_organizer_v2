@@ -775,7 +775,7 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}""
     def part_checkin(self, upc):
         """check a part back in"""
         # what to put at the end of the popup
-        pos_message = "\nYou may return the part to "
+        pos_message = " Please return part to "
 
         # also get the part location and add it to the message
         search_sql = f"SELECT part_placement FROM parts WHERE part_upc = {upc}"
