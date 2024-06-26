@@ -4,7 +4,6 @@ from PIL import ImageFont
 from db_interactions import Organizer
 import psycopg2.errors as p2er
 import re
-from time import sleep
 
 # theme stuff
 ctk.set_appearance_mode("dark")
@@ -346,7 +345,7 @@ class MainWindow:
         part_questions = {
             "Manufacturer": 255,
             "Manufacturer's part number": 255,
-            "Placement location": 10,
+            "Placement location": 4,
             "Description": 0,
             "Quantity": "int"
         }
@@ -780,13 +779,22 @@ class MainWindow:
 
     @handle_exceptions
     def raise_search(self, search_type):
-        """clear the search box and raise 'find a part'"""
+        """clear the search box and raise either 'part search' or 'user search' depending on the search_type"""
+
+        # this should never be fired
         if search_type not in ["user", "part"]: raise Exception("Invalid search type. Must be either 'user' or 'part'. This is a program issue, not a user issue.")
+
+        # configure app to new search type
         self.search_mode = search_type
-        self.find_part.tkraise()
+
+        # clear leftover data
         self.search_box.delete("0", "end")
-        self.search_box.focus()
+        self.part_generic_info.configure(text="")
         self.update_search()
+
+        # raise the search window
+        self.find_part.tkraise()
+        self.search_box.focus()
 
     @handle_exceptions
     def update_search(self, *_):

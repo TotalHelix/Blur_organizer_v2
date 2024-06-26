@@ -1,4 +1,8 @@
 # label printing
+import os
+from barcode.writer import ImageWriter
+from barcode import UPCA
+from PIL import Image
 from textwrap import wrap
 from zpl import Label
 from zebra import Zebra
@@ -15,10 +19,32 @@ from random import randint, choice
 from names import get_first_name, get_last_name
 
 
+def upc_new(upc_code):
+    """generate a simple barcode upc"""
+
+    # generate the barcode object
+    # the code should already be a string but just in case
+    my_code = UPCA(str(upc_code), writer=ImageWriter())
+    my_code.save("tmp_code")
+
+    # resize the barcode
+    code_img = Image.open("tmp_code.png")
+    # code_img.thumbnail((57, 25))
+    # code_img.save("tmp_code.png")
+
+    os.system("mspaint /PT ./tmp_code.png")  # for some reason the only way to automate printing with zebra is to tell microsoft paint to send the printer something
+
+    # delete the barcode
+    os.remove("tmp_code.png")
+
+
 def render_upc(code, placement, desc_text, printer="Zebra "):
     """the new and improved way to render upc codes using zebra
     returns the error that took place when printing (or none)"""
+    upc_new(code)
+
     args = (code, placement, desc_text, printer)
+    print("in render_upc!", "; ".join(args))
     # generate a zpl command
 
     # change the code to a number
@@ -76,7 +102,7 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
 
     # preview the label for testing
     # label.preview()
-    # sys.exit(0)
+    # return
 
     # print the label
     try:
@@ -84,6 +110,7 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
         if "zebra" in printer.lower():
             # generate the command
             zpl_command = label.dumpZPL()
+            print(zpl_command)
 
             # get the printer
             printer = Zebra()
@@ -94,8 +121,9 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
 
             # find which printer is the zebra
             for queue_item in queue:
-                if "zsb" in str(queue_item).lower():
+                if "zebra technologies" in str(queue_item).lower():
                     selected_queue = queue_item
+                    print("selected queue:", selected_queue)
                     break
 
             # if no printer is found
@@ -107,6 +135,7 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
 
             # print to the printer
             printer.output(zpl_command)
+            print("program has been output")
 
         elif "preview" in printer.lower():
             label.preview()
@@ -114,7 +143,10 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
         # invalid printer type
         else:
             return "Invalid printer type. This is most likely an issue with the program.", code, placement, desc_text, printer
+
+        print('got to end of program')
     except Exception as e:
+        raise e
         return e, *args
 
 
@@ -232,7 +264,7 @@ class Organizer:
                 [
                     # name                  data type       len     primary key references           extra tags
                     ["part_upc",            "bigint",       None,   True,       None,               "NOT NULL"],
-                    ["part_placement", "varchar", "10", False, None, "NOT NULL UNIQUE"],
+                    ["part_placement", "varchar", "4", False, None, "NOT NULL UNIQUE"],
                     ["mfr_pn", "varchar", "255", False, None, ""],
                     ["part_mfr", "varchar", "255", False, 'manufacturers; mfr_id', "NOT NULL"],
                     ["part_desc", "varchar", None, False, None, "NOT NULL"],
