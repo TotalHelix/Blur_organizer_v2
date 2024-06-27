@@ -17,17 +17,13 @@ def make_link_button(itf):
     ctk.CTkButton(itf, width=20, height=30, text="↗").pack(side="right")
 
 
-def make_box(itf, v, tall=False, ignore_stack=False):
+def make_box(itf, v, tall=False):
     """generates a box frame for displaying output text when a list button is selected"""
     textbox_height = 60 if tall else 20
-    value_box = ctk.CTkTextbox(itf, height=textbox_height, activate_scrollbars=not ignore_stack)
+    value_box = ctk.CTkTextbox(itf, height=textbox_height)
     value_box.insert("0.0", v)
     value_box.configure(state="disabled")
-    if ignore_stack:
-        value_box.configure(height=45)
-        value_box.pack(padx=10, pady=7)
-    else:
-        value_box.pack(side="right", padx=10)
+    value_box.pack(side="right", padx=10, pady=7)
 
 
 def validate_upc(new_value):
@@ -880,7 +876,6 @@ class MainWindow:
         for key, value in part_info.items():
             # generate a frame to put the item and text side by side
             item_frame = ctk.CTkFrame(self.part_generic_info, fg_color="transparent")
-            # TODO have a different way of width splicing
 
             # object description
             ctk.CTkLabel(item_frame, fg_color="transparent", text=key).pack(side="left")
@@ -893,8 +888,10 @@ class MainWindow:
 
                 # make a box for each checkout
                 for part in value:
-                    make_box(stack_boxes_frame, part, tall=True, ignore_stack=True)
-                    # make_link_button(stack_boxes_frame)
+                    yet_another_frame = ctk.CTkFrame(stack_boxes_frame, fg_color="transparent")
+                    yet_another_frame.pack()
+                    make_box(yet_another_frame, part, tall=True)
+                    make_link_button(yet_another_frame)
             else:
                 # normal value boxes
                 make_box(item_frame, value, key.lower() == "description")
@@ -907,7 +904,7 @@ class MainWindow:
             self.output_frames.append(item_frame)
 
         for frame in self.output_frames:
-            frame.pack(fill="x", expand=True, pady=7)
+            frame.pack(fill="x", expand=True)
 
         # new_text = width_splice(new_text, 16, 400)
 
