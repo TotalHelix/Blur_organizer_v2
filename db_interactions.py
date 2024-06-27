@@ -30,13 +30,12 @@ def upc_new(upc_code):
     # resize the barcode
     code_img = Image.open("tmp_code.png")
     # code_img.thumbnail((57, 25))
-    # code_img.save("tmp_code.png")
+    code_img.save("tmp_code.png")
 
-    os.system("mspaint /PT ./tmp_code.png")  # for some reason the only way to automate printing with zebra is to tell microsoft paint to send the printer something
+    # os.system("mspaint /PT ./tmp_code.png")  # for some reason the only way to automate printing with zebra is to tell microsoft paint to send the printer something
 
     # delete the barcode
     os.remove("tmp_code.png")
-
 
 def render_upc(code, placement, desc_text, printer="Zebra "):
     """the new and improved way to render upc codes using zebra
@@ -147,7 +146,6 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
         print('got to end of program')
     except Exception as e:
         raise e
-        return e, *args
 
 
 def random_word():
@@ -406,6 +404,10 @@ class Organizer:
         self.conn.commit()
 
         return old_id
+
+    def upc_create(self, code):
+        print("this doesn't work yet")
+        upc_new(code)
 
     def rename_mfr(self, mfr_id, new_name):
         """rename the mfr with id mfr_id to new_name"""
@@ -1246,7 +1248,9 @@ WHERE user_id = '{target_id}'"""
         # get the number of parts checked out by the user
         checkout_search = f"SELECT checked_out_part, checkout_timestamp FROM part_locations WHERE current_holder = '{target_id}'"
         self.cursor.execute(checkout_search)
-        parts_out = [[part, time.strftime("%b %d, %Y - %I:%M %p")] for part, time in self.cursor.fetchall()]
+        parts_out = [str(part) + time.strftime("\non %b %d, %Y - %I:%M %p") for part, time in self.cursor.fetchall()]
+        print(parts_out)
+        print(type(parts_out))
 
         # if the program wants raw data and not a nice table
         if raw:
@@ -1260,7 +1264,7 @@ WHERE user_id = '{target_id}'"""
                 "Email": search_results[3],
                 "Parts checked out": parts_out
             }
-
+            print(type(parts_out))
             return formatted_results
 
     # checked out parts

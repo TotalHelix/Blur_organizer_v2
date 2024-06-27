@@ -12,9 +12,24 @@ green = "#32a852"
 hover_red = "#781610"
 hover_green = "#0f4f22"
 
-# TODO at some point: make the results screen have nice buttons that let you jump to references
 
-# Validation function to allow only digits
+def make_link_button(itf):
+    ctk.CTkButton(itf, width=20, height=30, text="↗").pack(side="right")
+
+
+def make_box(itf, v, tall=False, ignore_stack=False):
+    """generates a box frame for displaying output text when a list button is selected"""
+    textbox_height = 60 if tall else 20
+    value_box = ctk.CTkTextbox(itf, height=textbox_height, activate_scrollbars=not ignore_stack)
+    value_box.insert("0.0", v)
+    value_box.configure(state="disabled")
+    if ignore_stack:
+        value_box.configure(height=45)
+        value_box.pack(padx=10, pady=7)
+    else:
+        value_box.pack(side="right", padx=10)
+
+
 def validate_upc(new_value):
     """Check if the new value contains only digits and is not longer than 12 characters"""
     if new_value.isdigit() and len(new_value) <= 12:
@@ -125,6 +140,7 @@ class MainWindow:
         self.search_mode = "part"
         self.selected_part_key = ""
         self.checkout_upc = ""
+        self.output_frames = []
 
         # for interactions with the database
         self.controller = None
@@ -331,13 +347,14 @@ class MainWindow:
         ctk.CTkButton(**button_form, text="+ Add", command=self.add_part).pack(**button_pack)
         ctk.CTkButton(**button_form, text="️🗑 Delete", command=self.remove_part).pack(**button_pack)
         ctk.CTkButton(**button_form, text="🖉 Edit", command=self.edit_part_form).pack(**button_pack)
+        ctk.CTkButton(**button_form, text="🖨 Print", command=lambda: self.controller.upc_create(self.selected_part_key)).pack(**button_pack)
 
         # right side (display part info)
         part_info_display_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", width=350)
         part_info_display_frame.grid(row=0, column=1, rowspan=2, sticky="nsew")
 
-        self.part_generic_info = ctk.CTkLabel(part_info_display_frame, fg_color="transparent", text="", justify="left", font=("Ariel", 16), width=300, anchor="w")
-        self.part_generic_info.pack(padx=0, pady=20, anchor="w", expand=False)
+        self.part_generic_info = ctk.CTkFrame(part_info_display_frame, fg_color="transparent")
+        self.part_generic_info.pack(padx=0, pady=20, anchor="n", expand=True, fill="x")
 
         #######################
         # add new part form
@@ -789,7 +806,7 @@ class MainWindow:
 
         # clear leftover data
         self.search_box.delete("0", "end")
-        self.part_generic_info.configure(text="")
+        self.clear_output_box()
         self.update_search()
 
         # raise the search window
@@ -826,6 +843,12 @@ class MainWindow:
                 self.part_widgets.append(part_widget)
 
     @handle_exceptions
+    def clear_output_box(self):
+        for item in self.output_frames:
+            item.pack_forget()
+        self.output_frames.clear()
+
+    @handle_exceptions
     def list_button_select(self, button_index=None, database_key=None):
         """select the targeted part and update the results accordingly"""
         if not database_key:
@@ -851,21 +874,42 @@ class MainWindow:
             part_info = self.controller.user_data(database_key)
             if len(part_info["Parts checked out"]) < 1:
                 part_info["Parts checked out"] = "None"
-            else:
-                part_info["Parts checked out"] = "\n" + "\n".join([f"{part} on {date}" for part, date in part_info["Parts checked out"]])
 
         # display the part info
-        self.part_generic_info.configure(text="")
-        new_text = ""
+        self.clear_output_box()
         for key, value in part_info.items():
-            # if key.lower() == "description":
-            #     textbox_write(self.part_description, value)
-            # else:
+            # generate a frame to put the item and text side by side
+            item_frame = ctk.CTkFrame(self.part_generic_info, fg_color="transparent")
+            # TODO have a different way of width splicing
 
-            new_text += f"{key}: {value}\n\n"
+            # object description
+            ctk.CTkLabel(item_frame, fg_color="transparent", text=key).pack(side="left")
 
-        new_text = width_splice(new_text, 16, 400)
-        self.part_generic_info.configure(text=new_text)
+            # object value
+            if key == "Parts checked out" and value != "None":
+                # special rules for parts checked out
+                stack_boxes_frame = ctk.CTkFrame(item_frame, fg_color="transparent")
+                stack_boxes_frame.pack(side="right")
+
+                # make a box for each checkout
+                for part in value:
+                    make_box(stack_boxes_frame, part, tall=True, ignore_stack=True)
+                    # make_link_button(stack_boxes_frame)
+            else:
+                # normal value boxes
+                make_box(item_frame, value, key.lower() == "description")
+
+            # jump to reference button
+            if key.lower() == "currently checked out by" and value.lower() != "not checked out":
+                make_link_button(item_frame)
+
+            # save the item frame to a list so that we can draw everything at the same time
+            self.output_frames.append(item_frame)
+
+        for frame in self.output_frames:
+            frame.pack(fill="x", expand=True, pady=7)
+
+        # new_text = width_splice(new_text, 16, 400)
 
         # finally, highlight the selected item in the scrolling frame
         button.configure(fg_color="#1f6ba5")
