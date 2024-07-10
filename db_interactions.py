@@ -418,10 +418,10 @@ class Organizer:
         if email_results: return "-EMAIL_ALREADY_TAKEN-"
 
         # block existing names
-        name_matches = f"SELECT first_name FROM users WHERE last_name = '{lname}'"
+        name_matches = f"SELECT user_id FROM users WHERE last_name = '{lname}' AND first_name = '{fname}'"
         self.cursor.execute(name_matches)
-        matching_names = [row for row in self.cursor.fetchall() if row[0] != fname]
-        if matching_names: return "-NAME_ALREADY_TAKEN-"
+        # matching_names = [row for row in self.cursor.fetchall() if row[0] != fname]
+        if self.cursor.fetchall(): return "-NAME_ALREADY_TAKEN-"
 
         # I was going to have this change the userid as well but that was more complicated than expected, as thew userid is a primary key
         update_sql = f"UPDATE users SET (first_name, last_name, email) = ('{fname}', '{lname}', '{email}') WHERE user_id = '{old_id}'"
