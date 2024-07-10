@@ -20,8 +20,9 @@ from names import get_first_name, get_last_name
 
 
 def find_common_elements(list_to_compare):
-    if not list_to_compare:
-        return []
+    print(list_to_compare)
+    if not list_to_compare or list_to_compare == [[['No matching items', 'No matching items']]]:
+        return [(" ", " ", " ")]
 
     # Start with the first list's elements as the base set
     common_elements = set(list_to_compare[0])
@@ -29,7 +30,6 @@ def find_common_elements(list_to_compare):
     # Intersect with the remaining lists
     for lst in list_to_compare[1:]:
         common_elements.intersection_update(lst)
-        print(lst)
 
     print(list(common_elements))
     return list(common_elements)
@@ -680,16 +680,18 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr}"""
         return False
 
     def clear_checkout(self, parts_out):
-        """checks out all the parts and deletes the user"""
-        # check in all the parts that the user depends on
-        # that line sounds like a supervillain
+        """
+        check in all the parts that the user depends on
+        that line sounds like a supervillain
+        """
+
         for part in parts_out:
             self.part_checkin(part)
 
         self.conn.commit()
 
     def clear_delete(self, parts_out):
-        """like clear_checkout, but deletes instead."""
+        """like clear_checkout, but deletes instead."""  # woah when would this need to be used?
 
         for part in parts_out:
             delete_cascade_sql = """

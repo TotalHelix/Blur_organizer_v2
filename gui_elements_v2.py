@@ -9,8 +9,8 @@ import re
 ctk.set_appearance_mode("dark")
 red = "#d62c20"
 green = "#32a852"
-hover_red = "#781610"
-hover_green = "#0f4f22"
+color_red = {"fg_color": red, "hover_color": "#781610"}
+color_green = {"fg_color": green, "hover_color": "#0f4f22"}
 
 
 def _int(string):
@@ -102,7 +102,7 @@ def stackable_frame(master, title, desc, button_text, command):
     ctk.CTkLabel(frame_house, text=desc, font=("Ariel", 16), anchor="nw").grid(column=0, row=1, sticky="w", padx=15, pady=5)
 
     # button
-    ctk.CTkButton(frame_house, text=button_text, fg_color=red, hover_color=hover_red, command=command).grid(column=1, row=0, rowspan=2, padx=8)
+    ctk.CTkButton(frame_house, text=button_text, **color_red, command=command).grid(column=1, row=0, rowspan=2, padx=8)
 
 
 def max_length_validate(text, length):
@@ -141,6 +141,7 @@ class MainWindow:
         self.selected_part_key = ""
         self.checkout_upc = ""
         self.output_frames = []
+        self.prompt_response = None
 
         # for interactions with the database
         self.controller = None
@@ -174,7 +175,7 @@ class MainWindow:
             button = ctk.CTkButton(l_col, text=button_name, command=cmd)
             button.pack(padx=10, pady=11)
 
-        danger_zone_button = ctk.CTkButton(l_col, fg_color=red, hover_color=hover_red, text="Danger Zone", command=lambda: self.danger_zone.tkraise())
+        danger_zone_button = ctk.CTkButton(l_col, **color_red, text="Danger Zone", command=lambda: self.danger_zone.tkraise())
         danger_zone_button.pack(side=ctk.BOTTOM, padx=10, pady=11)
 
         # workspace
@@ -297,8 +298,8 @@ class MainWindow:
         self.prompt_text.pack(pady=5, padx=7)
         buttons_frame = ctk.CTkFrame(self.force_prompt, fg_color="transparent")
         buttons_frame.pack(pady=10)
-        ctk.CTkButton(buttons_frame, text="Yes", fg_color=green, hover_color=hover_green, command=lambda: self.checkout_finalize(force=True)).pack(side="left", padx=8)
-        ctk.CTkButton(buttons_frame, text="Cancel", fg_color=red, hover_color=hover_red, command=self.checkout_frame.tkraise).pack(side="left", padx=8)
+        ctk.CTkButton(buttons_frame, text="Yes", **color_green, command=lambda: self.checkout_finalize(force=True)).pack(side="left", padx=8)
+        ctk.CTkButton(buttons_frame, text="Cancel", **color_red, command=self.checkout_frame.tkraise).pack(side="left", padx=8)
 
         ###################
         # danger zone
@@ -347,7 +348,7 @@ class MainWindow:
         ctk.CTkButton(**button_form, text="+ Add", command=self.add_part).pack(**button_pack)
         ctk.CTkButton(**button_form, text="️🗑 Delete", command=self.remove_part).pack(**button_pack)
         ctk.CTkButton(**button_form, text="🖉 Edit", command=self.edit_part_form).pack(**button_pack)
-        ctk.CTkButton(**button_form, text="🖨 Print", command=lambda: self.controller.upc_create(self.selected_part_key)).pack(**button_pack)
+        # ctk.CTkButton(**button_form, text="🖨 Print", command=lambda: self.controller.upc_create(self.selected_part_key)).pack(**button_pack)
 
         # right side (display part info)
         part_info_display_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", width=350)
@@ -458,7 +459,64 @@ class MainWindow:
                         label.pack(side="left", padx=2)
 
     @handle_exceptions
+    def set_response(self, popup, response):
+        """sets self.prompt_response to response and deletes the popup window"""
+        self.prompt_response = response
+        popup.destroy()
+
+    @handle_exceptions
+    def popup_prompt(self, message="Are you sure?", options=None):
+        """
+        Creates a prompt for the user to click one of the provided options.
+        Get the user response by reading self.prompt_response ofter calling.
+        """
+        if not options:
+            options = ["Yes", "Cancel"]
+
+        popup = ctk.CTkToplevel()
+        popup.title(message)
+
+        # center the popup to the middle of the window
+        root_x = self.window.winfo_x()
+        root_y = self.window.winfo_y()
+        root_width = self.window.winfo_width()
+        root_height = self.window.winfo_height()
+        popup_width = 350
+        popup_height = 120
+
+        popup_x = root_x + (root_width // 2) - (popup_width // 2)
+        popup_y = root_y + (root_height // 2) - (popup_height // 2)
+        popup.geometry(f"{popup_width}x{popup_height}+{popup_x}+{popup_y}")
+
+        # remove the title bar
+        popup.overrideredirect(True)
+
+        ctk.CTkLabel(popup, text=message, fg_color="transparent", font=("Arial", 16)).pack(pady=10)
+        buttons_frame = ctk.CTkFrame(popup, fg_color="transparent")
+        buttons_frame.pack()
+
+        for option in options:
+            option_button = ctk.CTkButton(buttons_frame, text=option, command=lambda response=option: self.set_response(popup, response))
+
+            # make yes/confirm green and no/cancel red
+            if option.lower() == "yes" or option.lower() == "confirm":
+                option_button.configure(**color_green)
+            elif option.lower() == "no" or option.lower() == "cancel":
+                option_button.configure(**color_red)
+
+            option_button.pack(side="left", padx=10, pady=10)
+
+        popup.transient(self.window)
+        popup.grab_set()
+        self.window.wait_window(popup)
+
+
+    @handle_exceptions
     def make_link_button(self, itf, ref):
+        """
+        make a button that links a checked out part to its holder or
+        a user with a checkout to the part checked out
+        """
         ctk.CTkButton(itf, width=20, height=30, text="↗", command=lambda reference=ref: self.open_reference(ref)).pack(side="right")
 
     @handle_exceptions
@@ -473,7 +531,10 @@ class MainWindow:
 
     @handle_exceptions
     def update_user_select_options(self, key_event):
-        """in the checkout frame, get the info from the entry box and use it to search for users, and then add them to the dropdown"""
+        """
+        in the checkout frame, get the info from the entry box
+        and use it to search for users, and then add them to the dropdown
+        """
         # get the text from the entry box
         search_term = self.checkout_user_search.get()
 
@@ -594,6 +655,10 @@ class MainWindow:
     @handle_exceptions
     def remove_part(self):
         """delete the selected part"""
+        self.popup_prompt(message=f"Delete {self.search_mode} {self.selected_part_key}?")
+        if self.prompt_response == "No" or self.prompt_response == "Cancel":
+            return
+
         self.controller.delete_generic(self.selected_part_key, self.search_mode)
         self.update_search()
 
@@ -734,6 +799,15 @@ class MainWindow:
 
     @handle_exceptions
     def format_database(self):
+        """delete the database and remake everything"""
+
+        # confirm if the user wants to nuke everything
+        # said "response is not yes" here instead of "response is no" because force
+        # closing will count as a no, so one less way to accidentally nuke
+        self.popup_prompt("Are you sure?\nThis will delete everything in the database.")
+        if not (self.prompt_response.lower() == "yes" or self.prompt_response.lower() == "confirm"):
+            return
+
         # make sure that we are able to connect to the database
         if not self.check_db_connection(accept_postgres=True): return
 
@@ -751,6 +825,13 @@ class MainWindow:
 
     @handle_exceptions
     def populate_database(self):
+        """fill the database with sample data"""
+
+        # confirmation
+        self.popup_prompt("Populate the database?")
+        if not (self.prompt_response.lower() == "yes" or self.prompt_response.lower() == "confirm"):
+            return
+
         # make sure that we are able to connect to the database
         if not self.check_db_connection(accept_postgres=True): return
 
