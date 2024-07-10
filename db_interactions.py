@@ -19,6 +19,22 @@ from random import randint, choice
 from names import get_first_name, get_last_name
 
 
+def find_common_elements(list_to_compare):
+    if not list_to_compare:
+        return []
+
+    # Start with the first list's elements as the base set
+    common_elements = set(list_to_compare[0])
+
+    # Intersect with the remaining lists
+    for lst in list_to_compare[1:]:
+        common_elements.intersection_update(lst)
+        print(lst)
+
+    print(list(common_elements))
+    return list(common_elements)
+
+
 def upc_new(upc_code):
     """generate a simple barcode upc"""
 
@@ -1074,7 +1090,15 @@ WHERE checked_out_part = {part_id}"""
         the results for each section. If a result in found in every section, that's a match.
         """
 
-        return self.search_general_word(search_sql, search_term, filters, raw_table)
+        # if there is no search term, return everything
+        if search_term.isspace() or search_term == "":
+            return self.search_general_word(search_sql, search_term, filters, raw_table)
+
+        search_results = []
+        for word in search_term.split():
+            search_results.append(self.search_general_word(search_sql, word, filters, raw_table))
+
+        return find_common_elements(search_results)
 
     def search_general_word(self, search_sql, search_term, filters, raw_table):
         """
