@@ -1067,7 +1067,22 @@ WHERE checked_out_part = {part_id}"""
         return full_id
 
     def search_general(self, search_sql, search_term, filters, raw_table=False):
-        """general search function that all the other search functions are built off of"""
+        """
+        general search function that all the other search functions are built off of
+
+        splits the input into individual words and uses search_general_word to get
+        the results for each section. If a result in found in every section, that's a match.
+        """
+
+        return self.search_general_word(search_sql, search_term, filters, raw_table)
+
+    def search_general_word(self, search_sql, search_term, filters, raw_table):
+        """
+        The original search_general; handles the input as a single string.
+        This made it so that searching something like "John Doe" would have no
+        results, as "John" is the first_name column and "Doe" is the last_name
+        column.
+        """
         # add each filter if it exists
         # filters in order: "DESC", "MFR", "MFR_PN", "LOC"
         connector = "WHERE"
@@ -1137,8 +1152,8 @@ WHERE checked_out_part = {part_id}"""
         self.conn.commit()
 
     # ------ functions unique to each search area
-    # the foo_search makes the list that you see and can pick from
-    # the foo_data generates that right hand column with all the info
+    # the [part/user]_search makes the list that you see and can pick from
+    # the [part/user]_data generates that right hand column with all the info
 
     # parts
     def part_search(self, search_term, search_columns=None):

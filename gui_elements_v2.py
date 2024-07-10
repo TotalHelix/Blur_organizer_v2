@@ -891,8 +891,12 @@ class MainWindow:
         if self.search_mode == "part":
             part_info = self.controller.part_data(database_key)
         else:
-            user_id = self.controller.user_id_from_name(database_key)
-            part_info = self.controller.user_data(user_id)
+
+            # if the database key given is a name, convert it to a user id
+            if " " in database_key:
+                database_key = self.controller.user_id_from_name(database_key)
+
+            part_info = self.controller.user_data(database_key)
             if len(part_info["Parts checked out"]) < 1:
                 part_info["Parts checked out"] = "None"
 
