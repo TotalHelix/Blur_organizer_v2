@@ -149,7 +149,8 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
 
 
 def random_word():
-    return lorem.sentence().split(" ")[0]
+    """generate a single randon word"""
+    return lorem.sentence().split(" ")[0].lower()
 
 
 def strip_string(string_text):
@@ -186,6 +187,14 @@ class Organizer:
         self.conn.commit()
         self.cursor.close()
         self.conn.close()
+
+    def user_id_from_name(self, name):
+        name_split = name.split()
+        first_name, last_name = name_split[0], name_split[-1]
+        search_sql = f"SELECT user_id FROM users WHERE first_name = '{first_name}' AND last_name = '{last_name}'"
+
+        self.cursor.execute(search_sql)
+        return self.cursor.fetchall()[0][0]
 
     def upc_exists(self, upc):
         """check a upc to see if it exists in the database"""

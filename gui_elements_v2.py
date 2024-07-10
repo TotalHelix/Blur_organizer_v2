@@ -13,8 +13,12 @@ hover_red = "#781610"
 hover_green = "#0f4f22"
 
 
-def make_link_button(itf):
-    ctk.CTkButton(itf, width=20, height=30, text="↗").pack(side="right")
+def _int(string):
+    """turns a string into an int if the string can become an int"""
+    if string.isnumeric():
+        return int(string)
+    else:
+        return string
 
 
 def make_box(itf, v, tall=False):
@@ -454,6 +458,20 @@ class MainWindow:
                         label.pack(side="left", padx=2)
 
     @handle_exceptions
+    def make_link_button(self, itf, ref):
+        ctk.CTkButton(itf, width=20, height=30, text="↗", command=lambda reference=ref: self.open_reference(ref)).pack(side="right")
+
+    @handle_exceptions
+    def open_reference(self, ref):
+        if ref.isnumeric():
+            self.raise_search("part")
+        else:
+            self.raise_search("user")
+
+        print("sent", ref)
+        self.list_button_select(database_key=ref)
+
+    @handle_exceptions
     def update_user_select_options(self, key_event):
         """in the checkout frame, get the info from the entry box and use it to search for users, and then add them to the dropdown"""
         # get the text from the entry box
@@ -846,14 +864,20 @@ class MainWindow:
 
     @handle_exceptions
     def list_button_select(self, button_index=None, database_key=None):
+        print(database_key)
         """select the targeted part and update the results accordingly"""
         if not database_key:
             database_key = self.selected_part_key
 
         if not button_index:
             for i, button in enumerate(self.part_widgets):
-                if button.cget("text") == database_key:
+                if _int(button.cget("text")) == _int(database_key):
+                    print("got one!")
                     button_index = i
+
+        print(self.part_widgets)
+        print(button_index)
+
         button = self.part_widgets[button_index]
 
         if database_key.lower() == "no matching items":
@@ -867,7 +891,8 @@ class MainWindow:
         if self.search_mode == "part":
             part_info = self.controller.part_data(database_key)
         else:
-            part_info = self.controller.user_data(database_key)
+            user_id = self.controller.user_id_from_name(database_key)
+            part_info = self.controller.user_data(user_id)
             if len(part_info["Parts checked out"]) < 1:
                 part_info["Parts checked out"] = "None"
 
@@ -891,14 +916,15 @@ class MainWindow:
                     yet_another_frame = ctk.CTkFrame(stack_boxes_frame, fg_color="transparent")
                     yet_another_frame.pack()
                     make_box(yet_another_frame, part, tall=True)
-                    make_link_button(yet_another_frame)
+                    pn = part.split("\n")[0]
+                    self.make_link_button(yet_another_frame, pn)
             else:
                 # normal value boxes
                 make_box(item_frame, value, key.lower() == "description")
 
             # jump to reference button
             if key.lower() == "currently checked out by" and value.lower() != "not checked out":
-                make_link_button(item_frame)
+                self.make_link_button(item_frame, value.split("(")[0][:-1])
 
             # save the item frame to a list so that we can draw everything at the same time
             self.output_frames.append(item_frame)
