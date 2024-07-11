@@ -622,7 +622,7 @@ class Organizer:
             # come up with a description
             desc = lorem.sentence()
             # make a url
-            url = random_word()+random.choice((".org", ".com", ".net"))+"/"+hex(randint(1000000000, 999999999999999999)) if random.randint(1, 3) > 1 else ""
+            url = "https://"+random_word()+random.choice((".org", ".com", ".net"))+"/"+hex(randint(1000000000, 999999999999999999)) if random.randint(1, 3) > 1 else None
             print(url)
 
             # create the appropriate upc code
@@ -736,7 +736,7 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
         self.conn.commit()
         return "-SUCCESS-"
 
-    def add_part(self, desc, mfr_name, mfr_pn, placement, qty):
+    def add_part(self, desc, mfr_name, mfr_pn, placement, qty, url):
         """inset a row into the parts database"""
         # ----- get rid of special characters in the description
 
@@ -813,8 +813,12 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
         safe_mfr_pn = mfr_pn.replace("'", "''")
         safe_placement = placement.replace("'", "''")
 
-        # ----- perform the insertion
-        sql = f"INSERT INTO parts VALUES ({upc}, '{safe_placement}', '{safe_mfr_pn}', '{mfr_id}', '{safe_desc}', {qty})"
+        # make sure the webpage starts with https
+        if url == "": url = None
+        elif not url.startswith("https://"): url = "https://"+url
+
+        # ----- perform the insertion 😈
+        sql = f"INSERT INTO parts VALUES ({upc}, '{safe_placement}', '{safe_mfr_pn}', '{mfr_id}', '{safe_desc}', {qty}, '{url}')"
         self.cursor.execute(sql)
 
         # change the mfr table to display the number of parts
@@ -967,8 +971,11 @@ Please click "Add part" to add a part for the first time"""
 
         return filtered_users
 
-    def update_part(self, part_number, placement, mfr_pn, mfr, desc, qty):
+    def update_part(self, part_number, placement, mfr_pn, mfr, desc, qty, url):
         """update the row in the parts table with the new date for the part"""
+        if url == "": url = None
+        elif not url.startswith("https://"): url = "https://"+url
+
         # convert the mfr if a name is given instead of an id
         if isinstance(mfr, str) and not mfr.isnumeric():
 
@@ -989,7 +996,7 @@ Please click "Add part" to add a part for the first time"""
         if matches: return "-PLACEMENT_ALREADY_TAKEN-"
 
         # do the update
-        update_sql = f"UPDATE parts SET (part_placement, mfr_pn, part_mfr, part_desc, qty) = ('{placement}', '{mfr_pn}', {mfr}, '{desc}', {qty}) WHERE part_upc = {part_number}"
+        update_sql = f"UPDATE parts SET (part_placement, mfr_pn, part_mfr, part_desc, qty, url) = ('{placement}', '{mfr_pn}', {mfr}, '{desc}', {qty}, '{url}') WHERE part_upc = {part_number}"
         print(update_sql)
         self.cursor.execute(update_sql)
         self.conn.commit()
@@ -1146,6 +1153,7 @@ WHERE checked_out_part = {part_id}"""
                 # finish off the line
                 search_sql += f" as varchar)) LIKE '%{search_term.lower()}%'\n"
 
+        print(search_sql)
         self.cursor.execute(search_sql)
         search_results = self.cursor.fetchall()
 
@@ -1207,9 +1215,9 @@ WHERE checked_out_part = {part_id}"""
                 "part_placement": True,
                 "mfr_pn": True,
                 "mfr_name": True,
-                "part_desc": True
+                "part_desc": True,
+                "url": True
             }
-
 
         search_sql = f"""
 SELECT part_upc FROM parts 

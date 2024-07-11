@@ -4,6 +4,8 @@ from PIL import ImageFont
 from db_interactions import Organizer
 import psycopg2.errors as p2er
 import re
+from validators import validator
+from webbrowser import open as web_open
 
 # theme stuff
 ctk.set_appearance_mode("dark")
@@ -523,6 +525,9 @@ class MainWindow:
     def open_reference(self, ref):
         if ref.isnumeric():
             self.raise_search("part")
+        elif validator(ref):
+            web_open(ref)
+            return
         else:
             self.raise_search("user")
 
@@ -712,7 +717,7 @@ class MainWindow:
         if self.form_mode_add:
             try:
                 if self.search_mode == "part":
-                    new_key = self.controller.add_part(fields[3], *fields[:3], fields[4])
+                    self.controller.add_part(fields[3], *fields[:3], *fields[4:])
                 else:
                     new_key = self.controller.add_user(*fields)
 
@@ -720,18 +725,21 @@ class MainWindow:
                         self.popup_msg("This email is already in use!")
                         self.add_user_entries["Email"].configure(border_color=red)
                         return
+
                     elif new_key == "-NAME_ALREADY_TAKEN-":
                         self.popup_msg("This name is already in use")
                         self.add_user_entries["First name"].configure(border_color=red)
                         self.add_user_entries["Last name"].configure(border_color=red)
                         return
+
             except p2er.UniqueViolation:
                 self.popup_msg("this placement already exists! to change the quantity of a part, select edit from the \"find a part\" tab.")
                 return
+
         else:
             if self.search_mode == "part":
                 selected_part_upc = self.selected_part.cget("text")
-                result = self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], qty=fields[4])
+                result = self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], qty=fields[4], url=fields[5])
 
                 if result == "-PLACEMENT_ALREADY_TAKEN-":
                     self.popup_msg("This placement location is already in use.")
@@ -1013,11 +1021,16 @@ class MainWindow:
             ctk.CTkLabel(item_frame, fg_color="transparent", text=key).pack(side="left")
 
             # object value
-            if key == "Parts checked out" and value != "None":
+            if (key == "Parts checked out" or key == "Link to original part") and value != "None":
                 # special rules for parts checked out
                 stack_boxes_frame = ctk.CTkFrame(item_frame, fg_color="transparent")
                 stack_boxes_frame.pack(side="right")
 
+                if not isinstance(value, list):
+                    print("fired")
+                    value = [value]
+
+                print(value)
                 # make a box for each checkout
                 for part in value:
                     yet_another_frame = ctk.CTkFrame(stack_boxes_frame, fg_color="transparent")
