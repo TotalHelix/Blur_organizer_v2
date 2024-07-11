@@ -350,7 +350,8 @@ class MainWindow:
         ctk.CTkButton(**button_form, text="+ Add", command=self.add_part).pack(**button_pack)
         ctk.CTkButton(**button_form, text="️🗑 Delete", command=self.remove_part).pack(**button_pack)
         ctk.CTkButton(**button_form, text="🖉 Edit", command=self.edit_part_form).pack(**button_pack)
-        # ctk.CTkButton(**button_form, text="🖨 Print", command=lambda: self.controller.upc_create(self.selected_part_key)).pack(**button_pack)
+        self.print_button = ctk.CTkButton(**button_form, text="🖨 Print", command=lambda: self.controller.upc_create(self.selected_part_key))
+        self.print_button.pack(**button_pack)
 
         # right side (display part info)
         part_info_display_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", width=350)
@@ -531,7 +532,6 @@ class MainWindow:
         else:
             self.raise_search("user")
 
-        print("sent", ref)
         self.list_button_select(database_key=ref)
 
     @handle_exceptions
@@ -545,7 +545,6 @@ class MainWindow:
 
         # the last character hasn't registered yet, so add that from the key event
         key = key_event.keysym
-        print(key)
         if len(key) == 1: search_term += key
         if key == "BackSpace": search_term = search_term[:-1]
 
@@ -648,9 +647,7 @@ class MainWindow:
         if self.search_mode == "part":
             data = self.controller.part_data(self.selected_part_key)
             self.new_part_form.tkraise()
-            print(data.keys())
             for name, entry in self.add_part_entries.items():
-                print(name)
                 entry.delete(0, "end")
                 entry.insert(0, data[name])
 
@@ -759,15 +756,6 @@ class MainWindow:
                 else:
                     self.list_button_select(button_index=0, database_key=result)
 
-        # go back to the select screen  TO-DO    this reselect old part thing doesn't work
-        #                               TO-DO    it's just aesthetic though, so it doesn't really matter
-        # print(self.selected_part)
-        # if self.selected_part:
-        #     index_list = [(self.selected_part.cget("text") == part_widget.cget("text")) for part_widget in self.part_widgets]
-        #     if True in index_list:
-        #         part_index = index_list.index(True)
-        #         self.list_button_select(part_index, new_key)
-
         self.raise_search(self.search_mode)
 
     @handle_exceptions
@@ -775,18 +763,14 @@ class MainWindow:
         # make a connection to the database
         try:
             self.controller = Organizer()
-            print("we have a new connection")
         except Exception as er:
             # raise er
             self.popup_msg(er)
 
     @handle_exceptions
     def forget_popup(self, popup_id):
-        print(popup_id)
-        print(self.popup_counter)
         if popup_id == self.popup_counter:
             self.popup_window.place_forget()
-            print("forgot")
 
     @handle_exceptions
     def popup_msg(self, error_text, popup_type="error", display_time_sec=2):
@@ -845,7 +829,6 @@ class MainWindow:
         try:
             with Organizer("postgres") as postgres:
                 postgres.format_database()
-                print("ok")
             self.popup_msg("Database formatted successfully", "success")
         except Exception as error:
             self.popup_msg(str(error))
@@ -926,6 +909,12 @@ class MainWindow:
         # this should never be fired
         if search_type not in ["user", "part"]: raise Exception("Invalid search type. Must be either 'user' or 'part'. This is a program issue, not a user issue.")
 
+        # show/hide the print button
+        if search_type == "user":
+            self.print_button.pack_forget()
+        else:
+            self.print_button.pack(side="left", padx=10)
+
         # configure app to new search type
         self.search_mode = search_type
 
@@ -975,7 +964,6 @@ class MainWindow:
 
     @handle_exceptions
     def list_button_select(self, button_index=None, database_key=None):
-        print(database_key)
         """select the targeted part and update the results accordingly"""
         if not database_key:
             database_key = self.selected_part_key
@@ -983,11 +971,7 @@ class MainWindow:
         if not button_index:
             for i, button in enumerate(self.part_widgets):
                 if _int(button.cget("text")) == _int(database_key):
-                    print("got one!")
                     button_index = i
-
-        print(self.part_widgets)
-        print(button_index)
 
         button = self.part_widgets[button_index]
 
@@ -1027,10 +1011,8 @@ class MainWindow:
                 stack_boxes_frame.pack(side="right")
 
                 if not isinstance(value, list):
-                    print("fired")
                     value = [value]
 
-                print(value)
                 # make a box for each checkout
                 for part in value:
                     yet_another_frame = ctk.CTkFrame(stack_boxes_frame, fg_color="transparent")
@@ -1057,5 +1039,4 @@ class MainWindow:
         # finally, highlight the selected item in the scrolling frame
         button.configure(fg_color="#1f6ba5")
         self.selected_part = button
-        print(database_key)
         self.selected_part_key = database_key

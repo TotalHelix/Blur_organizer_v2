@@ -22,7 +22,6 @@ from names import get_first_name, get_last_name
 
 
 def find_common_elements(list_to_compare):
-    print(list_to_compare)
     if not list_to_compare or list_to_compare == [[['No matching items', 'No matching items']]]:
         return [(" ", " ", " ")]
 
@@ -33,7 +32,6 @@ def find_common_elements(list_to_compare):
     for lst in list_to_compare[1:]:
         common_elements.intersection_update(lst)
 
-    print(list(common_elements))
     return list(common_elements)
 
 
@@ -48,9 +46,22 @@ def upc_new(upc_code):
     # resize the barcode
     code_img = Image.open("tmp_code.png")
     # code_img.thumbnail((57, 25))
+
+    canvas_scale = 30
+    offset_scale = 5
+
+    # add padding to top and left
+    new_img = Image.new("RGB", (57*canvas_scale, 25*canvas_scale), "white")
+
+    # Paste the original image onto the new image, offset by the left and top space
+    new_img.paste(code_img, (57*offset_scale, 25*offset_scale+50))
+
+    # Optionally, show the new image
+    new_img.show()
     code_img.save("tmp_code.png")
 
-    # os.system("mspaint /PT ./tmp_code.png")  # for some reason the only way to automate printing with zebra is to tell microsoft paint to send the printer something
+    # print
+    os.system("mspaint /PT ./tmp_code.png")  # for some reason the only way to automate printing with zebra is to tell microsoft paint to send the printer something ¯\_(ツ)_/¯
 
     # delete the barcode
     os.remove("tmp_code.png")
@@ -62,7 +73,6 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
     upc_new(code)
 
     args = (code, placement, desc_text, printer)
-    print("in render_upc!", "; ".join(args))
     # generate a zpl command
 
     # change the code to a number
@@ -128,7 +138,6 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
         if "zebra" in printer.lower():
             # generate the command
             zpl_command = label.dumpZPL()
-            print(zpl_command)
 
             # get the printer
             printer = Zebra()
@@ -141,7 +150,6 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
             for queue_item in queue:
                 if "zebra technologies" in str(queue_item).lower():
                     selected_queue = queue_item
-                    print("selected queue:", selected_queue)
                     break
 
             # if no printer is found
@@ -153,7 +161,6 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
 
             # print to the printer
             printer.output(zpl_command)
-            print("program has been output")
 
         elif "preview" in printer.lower():
             label.preview()
@@ -162,7 +169,6 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
         else:
             return "Invalid printer type. This is most likely an issue with the program.", code, placement, desc_text, printer
 
-        print('got to end of program')
     except Exception as e:
         raise e
 
@@ -231,6 +237,7 @@ class Organizer:
         # if the database does already exist
         if "parts_organizer_db" in [name[0] for name in self.cursor.fetchall()]:
             print("there was a database in there")
+
             # disconnect from db
             terminate_conn = """
             SELECT pg_terminate_backend(pid) 
@@ -539,9 +546,9 @@ class Organizer:
         """fill the desired table with sample data"""
 
         # get the current tables
-        get_tables_sql = "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
-        self.cursor.execute(get_tables_sql)
-        print(self.cursor.fetchall())
+        # get_tables_sql = "SELECT table_name FROM information_schema.tables WHERE table_schema='public'"
+        # self.cursor.execute(get_tables_sql)
+        # print(self.cursor.fetchall())
 
         # first off, this does not need superuser
         self.cursor.close()
@@ -623,7 +630,6 @@ class Organizer:
             desc = lorem.sentence()
             # make a url
             url = "https://"+random_word()+random.choice((".org", ".com", ".net"))+"/"+hex(randint(1000000000, 999999999999999999)) if random.randint(1, 3) > 1 else None
-            print(url)
 
             # create the appropriate upc code
             other_mfrs = self.get_rows("part_mfr")
@@ -700,7 +706,6 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr}"""
         parts_out = self.cursor.fetchall()
 
         for part in parts_out:
-            print(part, part[0])
             self.part_checkin(part[0])
 
         self.conn.commit()
@@ -997,7 +1002,6 @@ Please click "Add part" to add a part for the first time"""
 
         # do the update
         update_sql = f"UPDATE parts SET (part_placement, mfr_pn, part_mfr, part_desc, qty, url) = ('{placement}', '{mfr_pn}', {mfr}, '{desc}', {qty}, '{url}') WHERE part_upc = {part_number}"
-        print(update_sql)
         self.cursor.execute(update_sql)
         self.conn.commit()
 
@@ -1153,7 +1157,6 @@ WHERE checked_out_part = {part_id}"""
                 # finish off the line
                 search_sql += f" as varchar)) LIKE '%{search_term.lower()}%'\n"
 
-        print(search_sql)
         self.cursor.execute(search_sql)
         search_results = self.cursor.fetchall()
 
@@ -1323,8 +1326,6 @@ WHERE user_id = '{target_id}'"""
         checkout_search = f"SELECT checked_out_part, checkout_timestamp FROM part_locations WHERE current_holder = '{target_id}'"
         self.cursor.execute(checkout_search)
         parts_out = [str(part) + time.strftime("\non %b %d, %Y - %I:%M %p") for part, time in self.cursor.fetchall()]
-        print(parts_out)
-        print(type(parts_out))
 
         # if the program wants raw data and not a nice table
         if raw:
@@ -1338,7 +1339,6 @@ WHERE user_id = '{target_id}'"""
                 "Email": search_results[3],
                 "Parts checked out": parts_out
             }
-            print(type(parts_out))
             return formatted_results
 
     # checked out parts
