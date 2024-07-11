@@ -53,6 +53,7 @@ def upc_new(upc_code):
     # delete the barcode
     os.remove("tmp_code.png")
 
+
 def render_upc(code, placement, desc_text, printer="Zebra "):
     """the new and improved way to render upc codes using zebra
     returns the error that took place when printing (or none)"""
@@ -679,14 +680,22 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr}"""
         # if no matches were found
         return False
 
-    def clear_checkout(self, parts_out):
+    def clear_checkout(self, usr_part_id):
         """
         check in all the parts that the user depends on
         that line sounds like a supervillain
         """
 
+        # column that we want to search in
+        search_col = "checked_out_part" if usr_part_id.isnumeric() else "current_holder"
+
+        # get the parts that the user has checked out
+        self.cursor.execute(f"SELECT checked_out_part FROM part_locations WHERE {search_col} = '{usr_part_id}'")
+        parts_out = self.cursor.fetchall()
+
         for part in parts_out:
-            self.part_checkin(part)
+            print(part, part[0])
+            self.part_checkin(part[0])
 
         self.conn.commit()
 
@@ -715,11 +724,11 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
         # try to delete
         try:
             self.cursor.execute(f"DELETE FROM {location[0]} WHERE {location[1]} = '{key}'")
-        except psycopg2.Error as fail_location:
-            print(fail_location)
-            return "fail"
+        except psycopg2.errors.ForeignKeyViolation as fail_location:
+            return "-PARTS_STILL_CHECKED_OUT-"
 
         self.conn.commit()
+        return "-SUCCESS-"
 
     def add_part(self, desc, mfr_name, mfr_pn, placement, qty):
         """inset a row into the parts database"""

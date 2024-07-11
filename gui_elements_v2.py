@@ -510,7 +510,6 @@ class MainWindow:
         popup.grab_set()
         self.window.wait_window(popup)
 
-
     @handle_exceptions
     def make_link_button(self, itf, ref):
         """
@@ -659,7 +658,19 @@ class MainWindow:
         if self.prompt_response == "No" or self.prompt_response == "Cancel":
             return
 
-        self.controller.delete_generic(self.selected_part_key, self.search_mode)
+        result = self.controller.delete_generic(self.selected_part_key, self.search_mode)
+
+        if result == "-PARTS_STILL_CHECKED_OUT-":
+
+            warning_msg = "This user still has parts checked out." if self.search_mode == "user" else "This part is still checked out."
+
+            self.popup_prompt(message=f"Warning!\n{warning_msg}\nWould you like to return checked out part(s)?")
+            if self.prompt_response.lower() == "yes" or self.prompt_response.lower() == "confirm":
+                self.controller.clear_checkout(self.selected_part_key)
+                self.controller.delete_generic(self.selected_part_key, self.search_mode)
+            else:
+                return
+
         self.update_search()
 
         self.popup_msg(f"Deleted {self.search_mode} {self.selected_part.cget('text')}", popup_type="success")
