@@ -25,7 +25,7 @@ def make_box(itf, v, tall=False):
     """generates a box frame for displaying output text when a list button is selected"""
     textbox_height = 60 if tall else 20
     value_box = ctk.CTkTextbox(itf, height=textbox_height)
-    value_box.insert("0.0", v)
+    value_box.insert("0.0", str(v))
     value_box.configure(state="disabled")
     value_box.pack(side="right", padx=10, pady=7)
 
@@ -108,7 +108,7 @@ def stackable_frame(master, title, desc, button_text, command):
 def max_length_validate(text, length):
     """max length for input validation"""
     if text == "": return True
-    if length == "int": return text.isdigit()
+    if length == "int": return text.isdigit() and int(text) < 32767
     if length == 0: return True
     return len(text) <= length
 
@@ -360,24 +360,25 @@ class MainWindow:
         #######################
         # add new part form
         #######################
-        part_questions = {
-            "Manufacturer": 255,
-            "Manufacturer's part number": 255,
-            "Placement location": 4,
-            "Description": 0,
-            "Quantity": "int"
+        self.part_questions = {  # "field": (max length, required)
+            "Manufacturer": (255, True),
+            "Manufacturer's part number": (255, False),
+            "Placement location": (4, True),
+            "Description": (0, True),
+            "Quantity": ("int", True),
+            "Link to original part": (0, False)
         }
 
-        user_questions = {
-            "First name": 50,
-            "Last name": 50,
-            "Email": 255
+        self.user_questions = {
+            "First name": (50, True),
+            "Last name": (50, True),
+            "Email": (255, True)
         }
 
         self.add_part_entries = {}
         self.add_user_entries = {}
-        self.new_part_form = self.make_new_form(part_questions, self.add_part_entries)
-        self.new_user_form = self.make_new_form(user_questions, self.add_user_entries)
+        self.new_part_form = self.make_new_form(self.part_questions, self.add_part_entries)
+        self.new_user_form = self.make_new_form(self.user_questions, self.add_user_entries)
 
         #######################
         # error message popup
@@ -593,9 +594,13 @@ class MainWindow:
         ctk.CTkButton(new_form, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=lambda: self.raise_search("user")).pack(fill="x", padx=40, pady=20)
 
         # main question fields
-        for question, length in questions_dict.items():
+        for question, fields in questions_dict.items():
+            # separate the fields
+            length, required = fields
+            ending = "" if required else " (optional)"
+
             # make a description text
-            ctk.CTkLabel(new_form, text="\n"+question, font=("Ariel", 16)).pack()
+            ctk.CTkLabel(new_form, text="\n"+question+ending, font=("Ariel", 16)).pack()
 
             # make a new entry box with the key
             validate_cmd = new_form.register(lambda e, l=length: max_length_validate(e, l))
@@ -683,19 +688,25 @@ class MainWindow:
 
         if self.search_mode == "part":
             entries = self.add_part_entries
+            reference_list = list(self.part_questions.values())
         else:
             entries = self.add_user_entries
+            reference_list = list(self.user_questions.values())
 
-        for item in entries.values():
+        for i, item in enumerate(entries.values()):
             field_text = item.get()
 
             fields.append(field_text)
-            if item.get() == "":
+            if item.get() == "" and reference_list[i][1]:
                 item.configure(border_color=red)
 
-        if "" in fields:
-            self.popup_msg("You have empty fields!")
-            return
+        i = 0
+        for field in fields:
+            if field == "" and reference_list[i][1]:
+                self.popup_msg("You have empty fields!")
+                return
+
+            i += 1
 
         # new part mode
         if self.form_mode_add:

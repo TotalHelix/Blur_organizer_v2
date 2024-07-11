@@ -1,5 +1,7 @@
 # label printing
 import os
+import random
+
 from barcode.writer import ImageWriter
 from barcode import UPCA
 from PIL import Image
@@ -292,7 +294,8 @@ class Organizer:
                     ["mfr_pn", "varchar", "255", False, None, ""],
                     ["part_mfr", "varchar", "255", False, 'manufacturers; mfr_id', "NOT NULL"],
                     ["part_desc", "varchar", None, False, None, "NOT NULL"],
-                    ["qty", "smallint", None, False, None, ""]
+                    ["qty", "smallint", None, False, None, "NOT NULL"],
+                    ["url", "varchar", None, False, None, ""]
                 ],
 
             "part_locations":
@@ -618,6 +621,9 @@ class Organizer:
             mfr = choice(self.get_rows("mfr_id"))
             # come up with a description
             desc = lorem.sentence()
+            # make a url
+            url = random_word()+random.choice((".org", ".com", ".net"))+"/"+hex(randint(1000000000, 999999999999999999)) if random.randint(1, 3) > 1 else ""
+            print(url)
 
             # create the appropriate upc code
             other_mfrs = self.get_rows("part_mfr")
@@ -636,7 +642,7 @@ class Organizer:
             # make a quantity, weighted heavily to lower numbers
             qty = randint(1, randint(1, randint(1, 50)))
 
-            sql = f"INSERT INTO parts VALUES ({upc}, '{placement}', '{mfr_pn}', '{mfr}', '{desc}', {qty})"
+            sql = f"INSERT INTO parts VALUES ({upc}, '{placement}', '{mfr_pn}', '{mfr}', '{desc}', {qty}, '{url}')"
             self.cursor.execute(sql)
 
             # change the mfr table to display the number of parts
@@ -724,7 +730,7 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
         # try to delete
         try:
             self.cursor.execute(f"DELETE FROM {location[0]} WHERE {location[1]} = '{key}'")
-        except psycopg2.errors.ForeignKeyViolation as fail_location:
+        except psycopg2.errors.ForeignKeyViolation:
             return "-PARTS_STILL_CHECKED_OUT-"
 
         self.conn.commit()
@@ -1216,7 +1222,7 @@ JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
         """get the part information for a upc code"""
         # sql to search for search term
         search_sql = f"""
-SELECT part_upc, part_placement, mfr_name, mfr_pn, part_desc, qty FROM parts 
+SELECT part_upc, part_placement, mfr_name, mfr_pn, part_desc, qty, url FROM parts 
 JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
 WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
         self.cursor.execute(search_sql)
@@ -1258,7 +1264,8 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
             "Manufacturer's part number": mfr_pn,
             "Currently checked out by": checkout_holder,
             "Quantity": search_results[5],
-            "Description": search_results[4]
+            "Description": search_results[4],
+            "Link to original part": search_results[6]
         }
 
         # return raw results if requested

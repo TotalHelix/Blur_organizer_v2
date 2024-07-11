@@ -8,3 +8,4 @@ app.window.mainloop()
 # TODO: hyperlink parts
 # TODO: the printer doesn't work
 # TODO: loading screen when rendering part/user data so that it's not so choppy
+# TODO: package to executable
