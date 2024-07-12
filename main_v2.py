@@ -5,4 +5,5 @@ app = MainWindow()
 app.window.mainloop()
 
 # TODO: initial setup in README
-# TODO: remove qty
+#   1) Support images
+#   2) Support hyperlinks (scary)
