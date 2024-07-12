@@ -2,6 +2,7 @@
 import os
 import random
 
+import pywintypes
 from barcode.writer import ImageWriter
 from barcode import UPCA
 from PIL import Image
@@ -68,9 +69,11 @@ def upc_new(upc_code):
 
 
 def render_upc(code, placement, desc_text, printer="Zebra "):
-    """the new and improved way to render upc codes using zebra
-    returns the error that took place when printing (or none)"""
-    upc_new(code)
+    """
+    the new way to render upc codes using zebra zpl
+    returns the error that took place when printing (or none)
+    """
+    # upc_new(code)
 
     args = (code, placement, desc_text, printer)
     # generate a zpl command
@@ -138,29 +141,26 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
         if "zebra" in printer.lower():
             # generate the command
             zpl_command = label.dumpZPL()
+            print(zpl_command)
 
             # get the printer
-            printer = Zebra()
+            z = Zebra()
+            print(printer)
 
             # set the printer queue
-            queue = printer.getqueues()
-            selected_queue = None
+            all_queues = z.getqueues()
+            zsb_queues = [queue for queue in all_queues if "zsb" in queue.lower()]
 
-            # find which printer is the zebra
-            for queue_item in queue:
-                if "zebra technologies" in str(queue_item).lower():
-                    selected_queue = queue_item
-                    break
+            for zsb_queue in zsb_queues:
+                try:
+                    z.setqueue(zsb_queue)
 
-            # if no printer is found
-            if not selected_queue:
-                raise Exception("No Zebra printer found")
+                    # Output the ZPL command to the printer
+                    z.output(zpl_command)
 
-            # set the queue to the zebra
-            printer.setqueue(selected_queue)
-
-            # print to the printer
-            printer.output(zpl_command)
+                    print(f"Print job sent to {zsb_queue}.")
+                except pywintypes.error:
+                    print(f"Print failed on {zsb_queue}.")
 
         elif "preview" in printer.lower():
             label.preview()
@@ -442,8 +442,11 @@ class Organizer:
         return old_id
 
     def upc_create(self, code):
-        print("this doesn't work yet")
-        upc_new(code)
+        get_sql = f"SELECT part_placement, part_desc FROM parts WHERE part_upc = {code}"
+        self.cursor.execute(get_sql)
+        placement, desc = self.cursor.fetchall()[0]
+
+        render_upc(code, placement, desc)
 
     def rename_mfr(self, mfr_id, new_name):
         """rename the mfr with id mfr_id to new_name"""
@@ -831,7 +834,7 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
 UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}"""
         self.cursor.execute(update_mfrs_table)
 
-        return render_upc(upc, safe_placement, desc, printer="Zebra ")
+        # return render_upc(upc, safe_placement, desc, printer="Zebra ")
         # return upc
 
     def add_mfr(self, mfr_name):
