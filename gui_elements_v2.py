@@ -1,5 +1,8 @@
+import os
+import time
 import tkinter as tk
 import customtkinter as ctk
+import requests
 from PIL import ImageFont
 from db_interactions import Organizer
 import psycopg2.errors as p2er
@@ -123,7 +126,7 @@ def handle_exceptions(func):
         except Exception as er:
 
             args[0].popup_msg(str(er))
-            raise er
+            # raise er
     return wrapper
 
 
@@ -359,6 +362,9 @@ class MainWindow:
 
         self.part_generic_info = ctk.CTkFrame(part_info_display_frame, fg_color="transparent")
         self.part_generic_info.pack(padx=0, pady=20, anchor="n", expand=True, fill="x")
+        self.output_box = ctk.CTkFrame(self.part_generic_info, fg_color="transparent")
+        self.output_box.pack(fill="both", expand=True)
+
 
         #######################
         # add new part form
@@ -368,7 +374,6 @@ class MainWindow:
             "Manufacturer's part number": (255, False),
             "Placement location": (4, True),
             "Description": (0, True),
-            "Quantity": ("int", True),
             "Link to original part": (0, False)
         }
 
@@ -417,8 +422,14 @@ class MainWindow:
         margin(self.home_frame)
 
         # include the readme (still part of home)
-        with open("README.md", "r") as readme:
-            document = "\n".join([s.rstrip() for s in readme.readlines()]).split("\n"*2)
+        try:
+            # raise Exception("forced exception")
+            try:
+                readme = open("README.md", "r")
+                document = "\n".join([s.rstrip() for s in readme.readlines()]).split("\n"*2)
+            except FileNotFoundError:
+                readme = requests.get("https://github.com/TotalHelix/Blur_organizer_v2/raw/main/README.md").text
+                document = "\n".join([s.rstrip() for s in readme.split("\n")]).split("\n"*2)
 
             for line in document:
                 line = line.replace("\n", " ")
@@ -461,6 +472,11 @@ class MainWindow:
                                                  font=("Arial", info[1]))
 
                         label.pack(side="left", padx=2)
+        except Exception as e:
+            ctk.CTkLabel(
+                self.home_frame, font=("Arial", 18),
+                text=f"We weren't able to load the home page.\n\nError: {str(e)}"
+            ).pack()
 
     @handle_exceptions
     def set_response(self, popup, response):
@@ -730,13 +746,13 @@ class MainWindow:
                         return
 
             except p2er.UniqueViolation:
-                self.popup_msg("this placement already exists! to change the quantity of a part, select edit from the \"find a part\" tab.")
+                # self.popup_msg("this placement already exists! to change the quantity of a part, select edit from the \"find a part\" tab.")
                 return
 
         else:
             if self.search_mode == "part":
                 selected_part_upc = self.selected_part.cget("text")
-                result = self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], qty=fields[4], url=fields[5])
+                result = self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], url=fields[4])
 
                 if result == "-PLACEMENT_ALREADY_TAKEN-":
                     self.popup_msg("This placement location is already in use.")
@@ -997,9 +1013,15 @@ class MainWindow:
 
         # display the part info
         self.clear_output_box()
+
+        self.output_box.pack_forget()
+        loading = ctk.CTkLabel(self.part_generic_info, text="\nLoading...", font=("Arial", 18))
+        loading.pack()
+
+        # make a holder for the content
         for key, value in part_info.items():
             # generate a frame to put the item and text side by side
-            item_frame = ctk.CTkFrame(self.part_generic_info, fg_color="transparent")
+            item_frame = ctk.CTkFrame(self.output_box, fg_color="transparent")
 
             # object description
             ctk.CTkLabel(item_frame, fg_color="transparent", text=key).pack(side="left")
@@ -1030,10 +1052,10 @@ class MainWindow:
 
             # save the item frame to a list so that we can draw everything at the same time
             self.output_frames.append(item_frame)
+            item_frame.pack(fill="x", expand=True)
 
-        for frame in self.output_frames:
-            frame.pack(fill="x", expand=True)
-
+        loading.pack_forget()
+        self.output_box.pack(fill="both", expand=True)
         # new_text = width_splice(new_text, 16, 400)
 
         # finally, highlight the selected item in the scrolling frame
