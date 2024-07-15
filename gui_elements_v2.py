@@ -187,8 +187,8 @@ class MainWindow:
         side_buttons = {
             # these have to be lambda again because the frames haven't been defined yet.
             "Home": lambda: self.home_frame.tkraise(),
-            "Check Out": lambda: self.checkout_frame.tkraise(),
-            "Check In": lambda: self.checkin_frame.tkraise(),
+            "Check Out": self.raise_checkout,
+            "Check In": self.raise_checkin,
             "Part Search": lambda: self.raise_search("part"),
             "User Search": lambda: self.raise_search("user")
         }
@@ -503,6 +503,7 @@ class MainWindow:
                             hyperlink_segments = hyperlink_pattern.split(inline_segment)
 
                             # Iterate over the parts and the matches to construct the new text
+                            link_text = ""  # this line isn't actually necessary, but it makes IntelliJ happy.
                             for i, hyperlink_segment in enumerate(hyperlink_segments):
                                 if i % 3 == 0:  # Normal text
                                     ctk.CTkLabel(line_frame, text=width_splice(hyperlink_segment, info[1]), font=("Arial", info[1])).pack(side="left", padx=2)
@@ -1050,6 +1051,18 @@ class MainWindow:
         for item in self.output_frames:
             item.pack_forget()
         self.output_frames.clear()
+
+    @handle_exceptions
+    def raise_checkout(self):
+        self.checkout_barcode.focus_set()
+        self.checkout_barcode.select_range(0, "end")
+        self.checkout_frame.tkraise()
+
+    @handle_exceptions
+    def raise_checkin(self):
+        self.checkin_barcode.focus_set()
+        self.checkin_barcode.select_range(0, "end")
+        self.checkin_frame.tkraise()
 
     @handle_exceptions
     def list_button_select(self, button_index=None, database_key=None):

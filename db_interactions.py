@@ -885,7 +885,7 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}""
                 self.conn.commit()
                 return "Successfully checked in." + pos_message
             else:
-                return "The scanned part was never checked out." + pos_message
+                return "The scanned part was never checked out." + pos_message + "or check out instead."
 
         else:
             # if the part can't be found in the parts table
