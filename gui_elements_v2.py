@@ -1,9 +1,10 @@
 import os
-import time
 import tkinter as tk
+import urllib
+
 import customtkinter as ctk
 import requests
-from PIL import ImageFont
+from PIL import ImageFont, Image
 from db_interactions import Organizer
 import psycopg2.errors as p2er
 import re
@@ -53,6 +54,8 @@ def margin(master):
 
 def width_splice(text, font_size, max_width=650):
     """break text after a certain number of pixels in a font"""
+
+    return text.strip()  # TODO: remove this line
 
     # just skip if there's not any text
     if text.isspace():
@@ -152,18 +155,7 @@ class MainWindow:
         self.controller = None
         self.postgres_exists = False
         self.connection = False
-        try:
-            with Organizer("postgres") as _:
-                # we were able to access postgres
-                self.postgres_exists = True
-
-            # now we should be able to connect as a customer with no problem
-            self.controller = Organizer("customer")
-
-            self.connection = True
-        except p2er.OperationalError as error_msg:
-            print(error_msg)
-            self.connection = False
+        self.db_connect()
 
         # left column
         l_col = ctk.CTkFrame(self.window, fg_color="transparent")
@@ -416,7 +408,7 @@ class MainWindow:
         ###################
         # home
         ###################
-        self.home_frame = ctk.CTkFrame(self.workspace)
+        self.home_frame = ctk.CTkScrollableFrame(self.workspace)
         self.home_frame.grid(row=0, column=0, sticky="news")
 
         margin(self.home_frame)
@@ -438,6 +430,18 @@ class MainWindow:
                 if not line or line.isspace():
                     continue
 
+                # images
+                if line.startswith("![") and "](" in line and line.endswith(")"):
+                    # get the image link
+                    image_link = line.split("](")[1].replace(")", "")
+
+                    urllib.request.urlretrieve(image_link, "tmp.png")
+                    my_img = Image.open("tmp.png")
+                    ctk_image = ctk.CTkImage(light_image=my_img, dark_image=my_img, size=(my_img.width, my_img.height))
+                    ctk.CTkLabel(self.home_frame, image=ctk_image, text="", anchor="w").pack(fill="both", expand="yes", padx=45)
+                    os.remove("tmp.png")
+                    continue
+
                 # format titles [start pos, font size]
                 info = [0, 14]
                 if line.startswith('# '):
@@ -454,29 +458,65 @@ class MainWindow:
                 paragraph_frame.pack(pady=10, anchor="w")
 
                 for label_line in width_splice(label_text, info[1]).split("\n"):
-                    # inline/quotebox formatting
-                    # Split the line based on backticks
-                    segments = re.split(r'(`[^`]+`)', label_line)
                     line_frame = ctk.CTkFrame(paragraph_frame, fg_color="transparent")
                     line_frame.pack(padx=40, anchor="w")
 
-                    for segment in segments:
-                        if segment.startswith('`') and segment.endswith('`'):
+                    # inline formatting
+                    # Split the line based on backticks
+                    inline_segments = re.split(r'(`[^`]+`)', label_line)
+                    for inline_segment in inline_segments:
+                        if inline_segment.startswith('`') and inline_segment.endswith('`'):
                             # Remove backticks and format as a quote box
-                            formatted_text = segment[1:-1]
-                            label = ctk.CTkLabel(line_frame, text=width_splice(formatted_text, info[1]),
-                                                 fg_color="#414243", corner_radius=5, font=("cascadia mono", info[1]))
+                            formatted_text = inline_segment[1:-1]
+                            ctk.CTkLabel(
+                                line_frame, text=width_splice(formatted_text, info[1]), fg_color="#414243", corner_radius=5, font=("cascadia mono", info[1])
+                            ).pack(side="left", padx=2)
                         else:
-                            # Normal text
-                            label = ctk.CTkLabel(line_frame, text=width_splice(segment, info[1]),
-                                                 font=("Arial", info[1]))
+                            # there has to be a better way to do this than this much nesting...
+                            hyperlink_pattern = re.compile(r'\[(.*?)\]\((.*?)\)')
 
-                        label.pack(side="left", padx=2)
+                            # Split text and keep the parts with and without links
+                            hyperlink_segments = hyperlink_pattern.split(inline_segment)
+
+                            # Iterate over the parts and the matches to construct the new text
+                            for i, hyperlink_segment in enumerate(hyperlink_segments):
+                                if i % 3 == 0:  # Normal text
+                                    ctk.CTkLabel(line_frame, text=width_splice(hyperlink_segment, info[1]), font=("Arial", info[1])).pack(side="left", padx=2)
+
+                                elif i % 3 == 1:  # Text with link attached
+                                    link_text = hyperlink_segment
+
+                                elif i % 3 == 2:  # Link attached to text (render text)
+                                    link = hyperlink_segment
+                                    hyperlink = ctk.CTkLabel(line_frame, text=width_splice(link_text, info[1]), text_color="#a4a2f2", font=("Arial", info[1]), cursor="hand2")
+                                    hyperlink.pack(side="left", padx=2)
+                                    hyperlink.bind("<Button-1>", lambda l=link: self.open_reference(ref=l))
+
         except Exception as e:
             ctk.CTkLabel(
                 self.home_frame, font=("Arial", 18),
                 text=f"We weren't able to load the home page.\n\nError: {str(e)}"
             ).pack()
+
+    @handle_exceptions
+    def db_connect(self):
+        if self.controller:
+            print("this should not be here")
+
+        try:
+            with Organizer("postgres") as _:
+                # we were able to access postgres
+                self.postgres_exists = True
+
+            # now we should be able to connect as a customer with no problem
+            print("try to connect")
+            self.controller = Organizer("customer")
+            print("connected")
+
+            self.connection = True
+        except p2er.OperationalError as error_msg:
+            print(str(error_msg))
+            self.connection = False
 
     @handle_exceptions
     def set_response(self, popup, response):
@@ -536,10 +576,10 @@ class MainWindow:
         make a button that links a checked out part to its holder or
         a user with a checkout to the part checked out
         """
-        ctk.CTkButton(itf, width=20, height=30, text="↗", command=lambda reference=ref: self.open_reference(ref)).pack(side="right")
+        ctk.CTkButton(itf, width=20, height=30, text="↗", command=lambda reference=ref: self.open_reference(ref=ref)).pack(side="right")
 
     @handle_exceptions
-    def open_reference(self, ref):
+    def open_reference(self, *_, ref):
         if ref.isnumeric():
             self.raise_search("part")
         elif validator(ref):
@@ -921,6 +961,12 @@ class MainWindow:
     @handle_exceptions
     def raise_search(self, search_type):
         """clear the search box and raise either 'part search' or 'user search' depending on the search_type"""
+
+        # try again to connect to the database
+        print("got a frame request; controller: "+str(self.controller))
+        if (not self.controller) or self.controller.cursor_exists():
+            print("sent connection request")
+            self.db_connect()
 
         # this should never be fired
         if search_type not in ["user", "part"]: raise Exception("Invalid search type. Must be either 'user' or 'part'. This is a program issue, not a user issue.")

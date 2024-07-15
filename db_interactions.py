@@ -1441,3 +1441,6 @@ WHERE mfr_name = '{target_name}'"""
         self.cursor.execute(user_check_sql)
 
         return "customer" in self.cursor.fetchall()
+
+    def cursor_exists(self):
+        return self.cursor

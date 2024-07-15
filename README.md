@@ -9,7 +9,7 @@ to begin, select one of the sections on the left side of the window.
 
 2. Run the PostgreSQL setup, unchecking the box for Stack Builder
 
-![Uncheck Stack Builder](https://i.imgur.com/upIszbK.png)
+![Uncheck Stack Builder](https://i.ibb.co/VvpzbCF/stackbuilder.png)
 
 3. Continue through the installer accepting all defaults, entering `blur4321` when 
 prompted for a password
