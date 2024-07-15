@@ -5,7 +5,7 @@ to begin, select one of the sections on the left side of the window.
 ### Initial setup
 
 1. first, download the latest version of [PostgreSQL](https://www.enterprisedb.com/downloads/postgres-postgresql-downloads)
-   and the [Zebra ZSB Drivers](https://zsbportal.zebra.com/apps)
+and the [Zebra ZSB Drivers](https://zsbportal.zebra.com/apps)
 
 2. Run the PostgreSQL setup, unchecking the box for Stack Builder
 
@@ -34,4 +34,4 @@ or email.
 ### Making a label
 
 With the part that you want to make a label for selected in the `Find a part` screen, click 
-the `🖨 Print` button.
+the `Print` button.

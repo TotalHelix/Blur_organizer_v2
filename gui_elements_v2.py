@@ -52,36 +52,60 @@ def margin(master):
     ctk.CTkLabel(master, text=" ", font=("Ariel", 1)).pack()
 
 
-def width_splice(text, font_size, max_width=650):
+def width_splice(text, font_size, max_width=650, use_dict=False):
     """break text after a certain number of pixels in a font"""
-
-    return text.strip()  # TODO: remove this line
-
+    print("raw line:", text)
     # just skip if there's not any text
     if text.isspace():
         return " "
 
+    hyperlink_pattern = re.compile(r'\[(.*?)]\((.*?)\)')
+    hyperlink_segments = hyperlink_pattern.split(text)
+    true_words = {}
+    link_text = ""
+    for i, part in enumerate(hyperlink_segments):
+        if i % 3 == 0:  # normal text
+            for word in part.split(" "):
+                true_words[word] = word
+        elif i % 3 == 1:  # hyperlinked text
+            link_text = part.strip(" ")
+        elif i % 3 == 2:  # link
+            hyperlink = part.strip(" ")
+
+            true_words[link_text] = f"[{link_text}]({hyperlink})"
+
     font = ImageFont.truetype("arial.ttf", font_size)
-    words = text.split(" ")
     lines = []
     current_line = ""
     current_width = 0
 
-    for word in words:
+    for word, full_word in true_words.items():
+        print("looping")
         if "\n" in word:
             current_width = 0
 
         word_width = font.getlength(word + " ")
         if current_width + word_width <= max_width:
-            current_line += word + " "
+            current_line += full_word + " "
             current_width += word_width
         else:
-            lines.append(current_line.strip())
+            # lines.append(current_line.strip(" "))
+            lines.append(current_line)
             current_line = word + " "
             current_width = word_width
 
+    print("lines:",str(lines))
+
     if current_line:
-        lines.append(current_line.strip())
+        lines.append(current_line.strip(" "))
+
+    # don't break for hyperlinks
+    # for i, line in enumerate(lines):
+    #     if len(lines) > i + 2:
+    #         lines[i+1] = " ".join((line[i], lines[i+1]))
+    #         lines[i] = None
+
+    # lines = [line for line in lines if line]
 
     return "\n".join(lines)
 
@@ -341,7 +365,7 @@ class MainWindow:
 
         button_form = {"master": thin_frame, "width": 100, "height": 32}
         button_pack = {"side": "left", "padx": 10}
-        #                                                                       has to ba lambda bc the new part form doesn't exist yet
+
         ctk.CTkButton(**button_form, text="+ Add", command=self.add_part).pack(**button_pack)
         ctk.CTkButton(**button_form, text="️🗑 Delete", command=self.remove_part).pack(**button_pack)
         ctk.CTkButton(**button_form, text="🖉 Edit", command=self.edit_part_form).pack(**button_pack)
@@ -356,7 +380,6 @@ class MainWindow:
         self.part_generic_info.pack(padx=0, pady=20, anchor="n", expand=True, fill="x")
         self.output_box = ctk.CTkFrame(self.part_generic_info, fg_color="transparent")
         self.output_box.pack(fill="both", expand=True)
-
 
         #######################
         # add new part form
@@ -463,6 +486,7 @@ class MainWindow:
 
                     # inline formatting
                     # Split the line based on backticks
+                    print("label line:", label_line)
                     inline_segments = re.split(r'(`[^`]+`)', label_line)
                     for inline_segment in inline_segments:
                         if inline_segment.startswith('`') and inline_segment.endswith('`'):
@@ -485,6 +509,7 @@ class MainWindow:
 
                                 elif i % 3 == 1:  # Text with link attached
                                     link_text = hyperlink_segment
+                                    print("link:", hyperlink_segment)
 
                                 elif i % 3 == 2:  # Link attached to text (render text)
                                     link = hyperlink_segment
