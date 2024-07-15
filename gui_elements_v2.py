@@ -473,7 +473,7 @@ class MainWindow:
                             ).pack(side="left", padx=2)
                         else:
                             # there has to be a better way to do this than this much nesting...
-                            hyperlink_pattern = re.compile(r'\[(.*?)\]\((.*?)\)')
+                            hyperlink_pattern = re.compile(r'\[(.*?)]\((.*?)\)')
 
                             # Split text and keep the parts with and without links
                             hyperlink_segments = hyperlink_pattern.split(inline_segment)
@@ -490,7 +490,7 @@ class MainWindow:
                                     link = hyperlink_segment
                                     hyperlink = ctk.CTkLabel(line_frame, text=width_splice(link_text, info[1]), text_color="#a4a2f2", font=("Arial", info[1]), cursor="hand2")
                                     hyperlink.pack(side="left", padx=2)
-                                    hyperlink.bind("<Button-1>", lambda l=link: self.open_reference(ref=l))
+                                    hyperlink.bind("<Button-1>", lambda _, l=link: self.open_reference(ref=l))
 
         except Exception as e:
             ctk.CTkLabel(
@@ -501,7 +501,7 @@ class MainWindow:
     @handle_exceptions
     def db_connect(self):
         if self.controller:
-            print("this should not be here")
+            print("this should not be here!")
 
         try:
             with Organizer("postgres") as _:
@@ -580,6 +580,8 @@ class MainWindow:
 
     @handle_exceptions
     def open_reference(self, *_, ref):
+        print(_)
+        print(ref)
         if ref.isnumeric():
             self.raise_search("part")
         elif validator(ref):
