@@ -1,4 +1,5 @@
 import os
+import time
 import tkinter as tk
 import urllib
 
@@ -186,7 +187,7 @@ class MainWindow:
         l_col.grid(row=0, column=0, padx=10, pady=10, sticky="ns")
         side_buttons = {
             # these have to be lambda again because the frames haven't been defined yet.
-            "Home": lambda: self.home_frame.tkraise(),
+            "Home": self.raise_home_frame,
             "Check Out": self.raise_checkout,
             "Check In": self.raise_checkin,
             "Part Search": lambda: self.raise_search("part"),
@@ -431,10 +432,12 @@ class MainWindow:
         ###################
         # home
         ###################
-        self.home_frame = ctk.CTkScrollableFrame(self.workspace)
-        self.home_frame.grid(row=0, column=0, sticky="news")
+        self.home_frame_base = ctk.CTkFrame(self.workspace)
+        self.home_frame = ctk.CTkScrollableFrame(self.home_frame_base)
+        self.home_frame_base.grid(row=0, column=0, sticky="news")
+        self.home_frame.pack(fill="both", expand=True)
 
-        margin(self.home_frame)
+        margin(self.home_frame_base)
 
         # include the readme (still part of home)
         try:
@@ -486,7 +489,6 @@ class MainWindow:
 
                     # inline formatting
                     # Split the line based on backticks
-                    print("label line:", label_line)
                     inline_segments = re.split(r'(`[^`]+`)', label_line)
                     for inline_segment in inline_segments:
                         if inline_segment.startswith('`') and inline_segment.endswith('`'):
@@ -510,7 +512,6 @@ class MainWindow:
 
                                 elif i % 3 == 1:  # Text with link attached
                                     link_text = hyperlink_segment
-                                    print("link:", hyperlink_segment)
 
                                 elif i % 3 == 2:  # Link attached to text (render text)
                                     link = hyperlink_segment
@@ -520,9 +521,13 @@ class MainWindow:
 
         except Exception as e:
             ctk.CTkLabel(
-                self.home_frame, font=("Arial", 18),
+                self.home_frame_base, font=("Arial", 18),
                 text=f"We weren't able to load the home page.\n\nError: {str(e)}"
             ).pack()
+
+    @handle_exceptions
+    def raise_home_frame(self):
+        self.home_frame_base.tkraise()
 
     @handle_exceptions
     def db_connect(self):
@@ -991,13 +996,11 @@ class MainWindow:
         """clear the search box and raise either 'part search' or 'user search' depending on the search_type"""
 
         # try again to connect to the database
-        print("got a frame request; controller: "+str(self.controller))
         if (not self.controller) or self.controller.cursor_exists():
-            print("sent connection request")
             self.db_connect()
 
         # this should never be fired
-        if search_type not in ["user", "part"]: raise Exception("Invalid search type. Must be either 'user' or 'part'. This is a program issue, not a user issue.")
+        if search_type not in ["user", "part"]: raise Exception("Invalid search type: Must be either 'user' or 'part'. This is most likely a backend issue.")
 
         # show/hide the print button
         if search_type == "user":
