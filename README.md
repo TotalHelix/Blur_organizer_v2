@@ -5,16 +5,19 @@ to begin, select one of the sections on the left side of the window.
 ### Initial setup
 
 1. first, download the latest version of [PostgreSQL](https://www.enterprisedb.com/downloads/postgres-postgresql-downloads)
-and the [Zebra ZSB Drivers](https://zsbportal.zebra.com/apps)
+and the [Zebra ZSB Drivers](https://zsbportal.zebra.com/apps). 
 
-2. Run the PostgreSQL setup, unchecking the box for Stack Builder
+2. Go through the Zebra ZSB setup. To log into the Zebra workspace,
+use the email blur.zebra@gmail.com and the password #Blur2018!!!
+
+3. Run the PostgreSQL setup, unchecking the box for Stack Builder
 
 ![Uncheck Stack Builder](https://i.ibb.co/VvpzbCF/stackbuilder.png)
 
-3. Continue through the installer accepting all defaults, entering `blur4321` when 
+4. Continue through the installer accepting all defaults, entering `blur4321` when 
 prompted for a password
 
-4. In the Blur Organizer under the `Danger Zone` tab, select `Format Database` to
+5. In the Blur Organizer under the `Danger Zone` tab, select `Format Database` to
 set up the database
 
 ### Adding a part or user
