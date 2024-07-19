@@ -1,34 +1,69 @@
-import os
+from os import remove as os_remove
 import tkinter as tk
 import urllib
-
 import customtkinter as ctk
 import requests
 from PIL import ImageFont, Image
 from db_interactions import Organizer
 import psycopg2.errors as p2er
-import re
-from validators import validator
+from re import compile, split as re_split
 from webbrowser import open as web_open
 
-# theme stuff
+# theme stuff; colors and fonts
 ctk.set_appearance_mode("dark")
 red = "#d62c20"
 green = "#32a852"
 color_red = {"fg_color": red, "hover_color": "#781610"}
 color_green = {"fg_color": green, "hover_color": "#0f4f22"}
+title = ("Arial", 30, "bold")
+subtitle = ("Ariel", 18)
+
+
+def list_button_format(text):
+    """
+    Takes a tuple of part (number, mfr, desc) and turns it into a single string to print on list buttons
+
+    :param text: tuple or list (pn, mfr, desc) that will be formatted
+    :return: string formatted text
+    """
+    if not isinstance(text, (tuple, list)):
+        raise("list_button_format requires a tuple argument, but received", type(text))
+
+    return f"{text[0]} ({text[1]})"  # TODO either remove this or everything after it
+
+    # maximum length of each section
+    max_lengths = [13, 13, 4]
+
+    final_string = ""
+
+    for i, item in enumerate(text):
+        print("index:", i)
+        if len(str(item)) > max_lengths[i]:
+            new_string = str(item)[:max_lengths[i]-3]+"..."
+        else:
+            new_string = str(item)
+        final_string += f'{new_string: <{max_lengths[i]}}'
+
+    return final_string
 
 
 def _int(string):
     """turns a string into an int if the string can become an int"""
+    print("all string seg:", string.split()[0])
+    print("string part:", string.split()[0])
+
     if string.isnumeric():
         return int(string)
+    elif string.split()[0].isnumeric():
+        print("we got one?", int(string.split()[0]))
+        return int(string.split()[0])
     else:
         return string
 
 
 def make_box(itf, v, tall=False):
     """generates a box frame for displaying output text when a list button is selected"""
+
     textbox_height = 60 if tall else 20
     value_box = ctk.CTkTextbox(itf, height=textbox_height)
     value_box.insert("0.0", str(v))
@@ -54,12 +89,11 @@ def margin(master):
 
 def width_splice(text, font_size, max_width=650, use_dict=False):
     """break text after a certain number of pixels in a font"""
-    print("raw line:", text)
     # just skip if there's not any text
     if text.isspace():
         return " "
 
-    hyperlink_pattern = re.compile(r'\[(.*?)]\((.*?)\)')
+    hyperlink_pattern = compile(r'\[(.*?)]\((.*?)\)')
     hyperlink_segments = hyperlink_pattern.split(text)
     true_words = {}
     link_text = ""
@@ -80,7 +114,6 @@ def width_splice(text, font_size, max_width=650, use_dict=False):
     current_width = 0
 
     for word, full_word in true_words.items():
-        print("looping")
         if "\n" in word:
             current_width = 0
 
@@ -93,8 +126,6 @@ def width_splice(text, font_size, max_width=650, use_dict=False):
             lines.append(current_line)
             current_line = word + " "
             current_width = word_width
-
-    print("lines:",str(lines))
 
     if current_line:
         lines.append(current_line.strip(" "))
@@ -117,7 +148,7 @@ def textbox_write(textbox, text):
     textbox.configure(state="disabled")
 
 
-def stackable_frame(master, title, desc, button_text, command):
+def stackable_frame(master, text, desc, button_text, command):
     """A stackable frame that has a title and description on the left, and a button on the right"""
     frame_house = ctk.CTkFrame(master, height=80)
     frame_house.pack(fill="x", padx=40, pady=7)
@@ -128,7 +159,7 @@ def stackable_frame(master, title, desc, button_text, command):
     frame_house.grid_rowconfigure(1, weight=1)
 
     # title
-    ctk.CTkLabel(frame_house, text=title, font=("Ariel", 18, "bold"), anchor="sw").grid(column=0, row=0, sticky="w", padx=15, pady=5)
+    ctk.CTkLabel(frame_house, text=text, font=subtitle, anchor="sw").grid(column=0, row=0, sticky="w", padx=15, pady=5)
 
     # description
     ctk.CTkLabel(frame_house, text=desc, font=("Ariel", 16), anchor="nw").grid(column=0, row=1, sticky="w", padx=15, pady=5)
@@ -153,13 +184,17 @@ def handle_exceptions(func):
         except Exception as er:
 
             args[0].popup_msg(str(er))
-            # raise er
+            raise er
     return wrapper
 
 
 class MainWindow:
     """The whole window that does all of everything"""
     def __init__(self):
+        # splash screen
+        # self.splash = tk.Tk()
+        # self.splash.update()
+
         # initial setup
         self.window = ctk.CTk()
         self.window.geometry("1000x700")
@@ -190,11 +225,13 @@ class MainWindow:
             "Check Out": self.raise_checkout,
             "Check In": self.raise_checkin,
             "Part Search": lambda: self.raise_search("part"),
-            "User Search": lambda: self.raise_search("user")
+            "User Search": lambda: self.raise_search("user"),
+            "Manage Parts": lambda: self.raise_manage("part"),
+            "Manage Users": lambda: self.raise_manage("user")
         }
         for button_name, cmd in side_buttons.items():
             button = ctk.CTkButton(l_col, text=button_name, command=cmd)
-            button.pack(padx=10, pady=11)
+            button.pack(padx=10, pady=13)
 
         danger_zone_button = ctk.CTkButton(l_col, **color_red, text="Danger Zone", command=lambda: self.danger_zone.tkraise())
         danger_zone_button.pack(side=ctk.BOTTOM, padx=10, pady=11)
@@ -218,11 +255,11 @@ class MainWindow:
         margin(self.checkin_frame)
 
         # Title Label
-        title_label = ctk.CTkLabel(self.checkin_frame, text="Return a part", font=ctk.CTkFont(size=30, weight="bold"))
+        title_label = ctk.CTkLabel(self.checkin_frame, text="Return a part", font=title)
         title_label.pack(pady=10)
 
         # Explanation Text
-        explanation_text = ctk.CTkLabel(self.checkin_frame, text="Please scan a barcode or manually enter digits of the part you would like to return:", font=("Ariel", 18))
+        explanation_text = ctk.CTkLabel(self.checkin_frame, text="Please scan a barcode or manually enter digits of the part you would like to return:", font=subtitle)
         explanation_text.pack(pady=10)
 
         # Register the validation function
@@ -255,7 +292,7 @@ class MainWindow:
         margin(self.checkout_frame)
 
         # Title Label
-        title_label = ctk.CTkLabel(self.checkout_frame, text="Check out a part", font=ctk.CTkFont(size=30, weight="bold"))
+        title_label = ctk.CTkLabel(self.checkout_frame, text="Check out a part", font=title)
         title_label.pack(pady=10)
 
         # Explanation Text
@@ -360,17 +397,8 @@ class MainWindow:
         self.selected_part = None
 
         # buttons that run along the bottom
-        thin_frame = ctk.CTkFrame(self.find_part, fg_color="transparent")
-        thin_frame.grid(column=0, row=2, columnspan=2, padx=40, pady=10, sticky="ew")
-
-        button_form = {"master": thin_frame, "width": 100, "height": 32}
-        button_pack = {"side": "left", "padx": 10}
-
-        ctk.CTkButton(**button_form, text="+ Add", command=self.add_part).pack(**button_pack)
-        ctk.CTkButton(**button_form, text="️🗑 Delete", command=self.remove_part).pack(**button_pack)
-        ctk.CTkButton(**button_form, text="🖉 Edit", command=self.edit_part_form).pack(**button_pack)
-        self.print_button = ctk.CTkButton(**button_form, text="🖨 Print", command=lambda: self.controller.upc_create(self.selected_part_key))
-        self.print_button.pack(**button_pack)
+        thin_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", height=25)
+        thin_frame.grid(column=0, row=2)
 
         # right side (display part info)
         part_info_display_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", width=350)
@@ -428,6 +456,42 @@ class MainWindow:
         x_button = ctk.CTkButton(self.popup_window, text="✕", font=("Arial", 20), width=30, height=30, fg_color="transparent", hover=False, anchor="ne", command=self.popup_window.place_forget)
         x_button.grid(column=1, row=0)
 
+        #######################
+        # manage parts/users
+        #######################
+        self.manage_parts_frame = ctk.CTkFrame(self.workspace)
+        self.manage_parts_frame.grid(row=0, column=0, sticky="news")
+
+        # margin
+        margin(self.manage_parts_frame)
+        # ctk.CTkFrame(self.manage_parts_frame, height=20, fg_color="transparent").pack()
+
+        # title
+        self.manage_title = ctk.CTkLabel(self.manage_parts_frame, text="Manage Parts", font=title)
+        self.manage_title.pack(pady=10)
+
+        # subtitle
+        self.manage_subtitle = ctk.CTkLabel(self.manage_parts_frame, text="", font=subtitle)
+        self.manage_subtitle.pack(pady=10)
+
+        # search box
+        self.manage_search_box = ctk.CTkEntry(self.manage_parts_frame, height=28, width=500, placeholder_text="Part number or user ID")
+        self.manage_search_box.pack(pady=20)
+
+        # buttons that run under the search box
+        thin_frame = ctk.CTkFrame(self.manage_parts_frame, fg_color="transparent")
+        thin_frame.pack()
+
+        # some button presets
+        button_form = {"master": thin_frame, "width": 100, "height": 32}
+        button_pack = {"side": "left", "padx": 10}
+
+        ctk.CTkButton(**button_form, text="+ Add", command=self.add_part).pack(**button_pack)
+        ctk.CTkButton(**button_form, text="️🗑 Delete", command=self.remove_part).pack(**button_pack)
+        ctk.CTkButton(**button_form, text="🖉 Edit", command=self.edit_part_form).pack(**button_pack)
+        self.print_button = ctk.CTkButton(**button_form, text="🖨 Print", command=self.print_label)
+        self.print_button.pack(**button_pack)
+
         ###################
         # home
         ###################
@@ -464,7 +528,7 @@ class MainWindow:
                     my_img = Image.open("tmp.png")
                     ctk_image = ctk.CTkImage(light_image=my_img, dark_image=my_img, size=(my_img.width, my_img.height))
                     ctk.CTkLabel(self.home_frame, image=ctk_image, text="", anchor="w").pack(fill="both", expand="yes", padx=45)
-                    os.remove("tmp.png")
+                    os_remove("tmp.png")
                     continue
 
                 # format titles [start pos, font size]
@@ -488,7 +552,7 @@ class MainWindow:
 
                     # inline formatting
                     # Split the line based on backticks
-                    inline_segments = re.split(r'(`[^`]+`)', label_line)
+                    inline_segments = re_split(r'(`[^`]+`)', label_line)
                     for inline_segment in inline_segments:
                         if inline_segment.startswith('`') and inline_segment.endswith('`'):
                             # Remove backticks and format as a quote box
@@ -498,7 +562,7 @@ class MainWindow:
                             ).pack(side="left", padx=2)
                         else:
                             # there has to be a better way to do this than this much nesting...
-                            hyperlink_pattern = re.compile(r'\[(.*?)]\((.*?)\)')
+                            hyperlink_pattern = compile(r'\[(.*?)]\((.*?)\)')
 
                             # Split text and keep the parts with and without links
                             hyperlink_segments = hyperlink_pattern.split(inline_segment)
@@ -520,9 +584,10 @@ class MainWindow:
 
         except Exception as e:
             ctk.CTkLabel(
-                self.home_frame_base, font=("Arial", 18),
+                self.home_frame_base, font=subtitle,
                 text=f"We weren't able to load the home page.\n\nError: {str(e)}"
             ).pack()
+            raise e
 
     @handle_exceptions
     def raise_home_frame(self):
@@ -553,6 +618,18 @@ class MainWindow:
         """sets self.prompt_response to response and deletes the popup window"""
         self.prompt_response = response
         popup.destroy()
+
+    @handle_exceptions
+    def print_label(self, upc=None):
+        """print a label from a upc code"""
+        print(upc)
+        if not upc:
+            upc = self.manage_search_box.get()
+            if not (upc.isnumeric() and len(upc) == 12):
+                self.popup_msg("Please enter a valid UPC!")
+                return
+
+        self.controller.upc_create(upc)
 
     @handle_exceptions
     def popup_prompt(self, message="Are you sure?", options=None):
@@ -611,10 +688,10 @@ class MainWindow:
     @handle_exceptions
     def open_reference(self, *_, ref):
         print(_)
-        print(ref)
+        print("ref:", ref)
         if ref.isnumeric():
             self.raise_search("part")
-        elif validator(ref):
+        elif ref.startswith("https://"):
             web_open(ref)
             return
         else:
@@ -748,7 +825,7 @@ class MainWindow:
 
     @handle_exceptions
     def remove_part(self):
-        """delete the selected part"""
+        """delete the selected part or user"""
         self.popup_prompt(message=f"Delete {self.search_mode} {self.selected_part_key}?")
         if self.prompt_response == "No" or self.prompt_response == "Cancel":
             return
@@ -766,13 +843,14 @@ class MainWindow:
             else:
                 return
 
+        self.list_button_select()
         self.update_search()
 
         self.popup_msg(f"Deleted {self.search_mode} {self.selected_part.cget('text')}", popup_type="success")
 
     @handle_exceptions
     def submit_controller(self):
-        """either updates or adds a new part depending on the submit mode"""
+        """either updates (edit mode) or adds (add mode) a new part depending on the submit mode"""
         # get the fields
         fields = []
 
@@ -798,29 +876,34 @@ class MainWindow:
 
             i += 1
 
+        result = ""
+
         # new part mode
         if self.form_mode_add:
             try:
                 if self.search_mode == "part":
-                    self.controller.add_part(fields[3], *fields[:3], *fields[4:])
+                    result = self.controller.add_part(fields[3], *fields[:3], *fields[4:])
+                    self.print_label(result)
                 else:
-                    new_key = self.controller.add_user(*fields)
+                    result = self.controller.add_user(*fields)
 
-                    if new_key == "-EMAIL_ALREADY_TAKEN-":
+                    if result == "-EMAIL_ALREADY_TAKEN-":
                         self.popup_msg("This email is already in use!")
                         self.add_user_entries["Email"].configure(border_color=red)
                         return
 
-                    elif new_key == "-NAME_ALREADY_TAKEN-":
+                    elif result == "-NAME_ALREADY_TAKEN-":
                         self.popup_msg("This name is already in use")
                         self.add_user_entries["First name"].configure(border_color=red)
                         self.add_user_entries["Last name"].configure(border_color=red)
                         return
 
+
             except p2er.UniqueViolation:
                 # self.popup_msg("this placement already exists! to change the quantity of a part, select edit from the \"find a part\" tab.")
                 return
 
+        # edit part mode
         else:
             if self.search_mode == "part":
                 selected_part_upc = self.selected_part.cget("text")
@@ -829,8 +912,6 @@ class MainWindow:
                 if result == "-PLACEMENT_ALREADY_TAKEN-":
                     self.popup_msg("This placement location is already in use.")
                     return
-                else:
-                    self.list_button_select(database_key=result)
             elif self.search_mode == "user":
                 result = self.controller.update_user(self.selected_part_key, *fields[0:3])
 
@@ -841,10 +922,10 @@ class MainWindow:
                 elif result == "-EMAIL_ALREADY_TAKEN-":
                     self.popup_msg("This email is already in use.")
                     return
-                else:
-                    self.list_button_select(button_index=0, database_key=result)
 
+        # self.raise_manage(self.search_mode)
         self.raise_search(self.search_mode)
+        self.list_button_select(database_key=result)
 
     @handle_exceptions
     def reconnect_db(self):
@@ -991,6 +1072,34 @@ class MainWindow:
         self.part_widgets = []
 
     @handle_exceptions
+    def raise_manage(self, search_type):
+        """raise the page for either the user or part management page"""
+
+        # try again to connect to the database
+        if (not self.controller) or self.controller.cursor_exists():
+            self.db_connect()
+
+        # this should never be fired
+        if search_type.lower() in ["user", "part"]:
+            self.search_mode = search_type.lower()
+        else:
+            raise Exception("Invalid search type: Must be either 'user' or 'part'. This is most likely a backend issue.")
+
+        # show/hide the print button
+        if search_type == "user":
+            self.print_button.pack_forget()
+            self.manage_title.configure(text="Mange Users")
+            self.manage_subtitle.configure(text="Enter the user ID of the user that you would like to configure, or click \"Add\"")
+        else:
+            self.print_button.pack(side="left", padx=10)
+            self.manage_title.configure(text="Mange Parts")
+            self.manage_subtitle.configure(text="Enter/scan the upc of the part that you would like to configure, or click \"Add\"")
+
+        # raise the management frame
+        self.manage_parts_frame.tkraise()
+
+
+    @handle_exceptions
     def raise_search(self, search_type):
         """clear the search box and raise either 'part search' or 'user search' depending on the search_type"""
 
@@ -1000,12 +1109,6 @@ class MainWindow:
 
         # this should never be fired
         if search_type not in ["user", "part"]: raise Exception("Invalid search type: Must be either 'user' or 'part'. This is most likely a backend issue.")
-
-        # show/hide the print button
-        if search_type == "user":
-            self.print_button.pack_forget()
-        else:
-            self.print_button.pack(side="left", padx=10)
 
         # configure app to new search type
         self.search_mode = search_type
@@ -1029,7 +1132,7 @@ class MainWindow:
             search = self.search_box.get()
             if self.search_mode == "part":
                 parts = self.controller.part_search(search)
-                names_dict = {part: part for part in parts}
+                names_dict = {part[0]: part[1:] for part in parts}
             elif self.search_mode == "user":
                 names_dict = self.controller.user_search(search, use_full_names=True)
                 parts = names_dict.keys()
@@ -1038,7 +1141,11 @@ class MainWindow:
 
             # add the parts into the scrolling frame
             for index, part in enumerate(parts):
-                name_text = str(names_dict[part])
+                if isinstance(part, (tuple, list)):
+                    name_text = list_button_format(part)
+                    part = part[0]
+                else:
+                    name_text = str(names_dict[part])
 
                 part_widget = ctk.CTkButton(
                     self.result_parts, text=name_text, anchor="w", fg_color="transparent",
@@ -1069,13 +1176,18 @@ class MainWindow:
     @handle_exceptions
     def list_button_select(self, button_index=None, database_key=None):
         """select the targeted part and update the results accordingly"""
+        print("list_button_select called")
+        print("button_index:", button_index, "database_key:", database_key)
         if not database_key:
             database_key = self.selected_part_key
 
         if not button_index:
             for i, button in enumerate(self.part_widgets):
+                print("about to call _int")
                 if _int(button.cget("text")) == _int(database_key):
                     button_index = i
+
+        if not button_index: print("no button index")
 
         button = self.part_widgets[button_index]
 
@@ -1130,8 +1242,8 @@ class MainWindow:
                     make_box(yet_another_frame, part, tall=True)
                     pn = part.split("\n")[0]
                     self.make_link_button(yet_another_frame, pn)
-            else:
-                # normal value boxes
+            elif key.lower() != "no results":
+                # normal value boxes, skipping "no matching items".
                 make_box(item_frame, value, key.lower() == "description")
 
             # jump to reference button

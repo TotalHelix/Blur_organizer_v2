@@ -831,7 +831,7 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}""
         self.cursor.execute(update_mfrs_table)
 
         # return render_upc(upc, safe_placement, desc, printer="Zebra ")
-        # return upc
+        return upc
 
     def add_mfr(self, mfr_name):
         self.cursor.execute(f"INSERT INTO manufacturers VALUES (default, '{mfr_name}', 0) RETURNING mfr_id")
@@ -1160,7 +1160,10 @@ WHERE checked_out_part = {part_id}"""
         search_results = self.cursor.fetchall()
 
         # change the table into a list of matching upcs
-        formatted_results = [row[0] for row in search_results]
+        if (not search_results) or len(search_results[0]) > 1:
+            formatted_results = search_results
+        else:
+            formatted_results = [row[0] for row in search_results]
 
         # if there are no results
         if len(formatted_results) <= 0 or connector == "WHERE":
@@ -1207,7 +1210,7 @@ WHERE checked_out_part = {part_id}"""
     # the [part/user]_data generates that right hand column with all the info
 
     # parts
-    def part_search(self, search_term, search_columns=None):
+    def part_search(self, search_term, search_columns=None, more_info=True):
         """get the matching upc codes to a search term"""
         # sql to search for search term
 
@@ -1222,11 +1225,26 @@ WHERE checked_out_part = {part_id}"""
             }
 
         search_sql = f"""
-SELECT part_upc FROM parts 
+SELECT part_upc, mfr_name, part_desc FROM parts 
 JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
 """
         results = self.search_general(search_sql, search_term, search_columns)
-        return [str(item).zfill(12) for item in results]
+        if not more_info:
+            return [str(item).zfill(12) for item in results]
+        else:
+            print(results[0])
+            print(results[0][0])
+
+            return [
+                (str(item[0]).zfill(12),
+                 item[1],
+                 item[2])
+                for item in results]
+
+    def part_exists(self, pn):
+        self.cursor.execute(f"SELECT part_upc FROM parts WHERE part_upc = {pn}")
+        print(self.cursor.fetchall())
+        return bool(self.cursor.fetchall()[0])
 
     def part_data(self, target_upc, raw=False):
         """get the part information for a upc code"""
