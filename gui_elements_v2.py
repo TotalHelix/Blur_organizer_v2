@@ -222,8 +222,6 @@ class MainWindow:
         side_buttons = {
             # these have to be lambda again because the frames haven't been defined yet.
             "Home": self.raise_home_frame,
-            "Check Out": self.raise_checkout,
-            "Check In": self.raise_checkin,
             "Part Search": lambda: self.raise_search("part"),
             "User Search": lambda: self.raise_search("user"),
             "Manage Parts": lambda: self.raise_manage("part"),
@@ -329,7 +327,7 @@ class MainWindow:
         margin(self.checkout_user_frame)
 
         # explainer text
-        ctk.CTkLabel(self.checkout_user_frame, text="Please select your account", font=("Ariel", 16)).pack(pady=10)
+        ctk.CTkLabel(self.checkout_user_frame, text="Please select your account", font=title).pack(pady=10)
 
         # frame for the search box and dropdown
         long_frame = ctk.CTkFrame(self.checkout_user_frame, fg_color="transparent")
@@ -346,9 +344,11 @@ class MainWindow:
         self.checkout_user_dropdown = ctk.CTkOptionMenu(long_frame, values=[" "], variable=self.checkout_selected_user)
         self.checkout_user_dropdown.pack(side="left")
 
+        ctk.CTkLabel(self.checkout_user_frame, text="If you don't see your account, you can create a new one under the Manage Users tab.").pack()
+
         # check out button (not a trick like the 'go' button)
         self.checkout_finalize_button = ctk.CTkButton(self.checkout_user_frame, text="Check Out", command=self.checkout_finalize)
-        self.checkout_finalize_button.pack()
+        self.checkout_finalize_button.pack(pady=20)
 
         # prompt for force checkout
         self.force_prompt = ctk.CTkFrame(self.checkout_user_frame)
@@ -397,8 +397,11 @@ class MainWindow:
         self.selected_part = None
 
         # buttons that run along the bottom
-        thin_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", height=25)
-        thin_frame.grid(column=0, row=2)
+        thin_frame = ctk.CTkFrame(self.find_part, fg_color="transparent")  # , height=25)   # add this back if you want a blank margin with no buttons
+        thin_frame.grid(column=0, row=2, columnspan=2, sticky="NEWS", padx=27)
+
+        for name, cmd in [("🛒 Check Out", self.checkout_continue), ("🔄 Return", self.checkin_continue)]:
+            ctk.CTkButton(thin_frame, text=name, width=100, height=32, command=cmd).pack(side="left", padx=15, pady=11)
 
         # right side (display part info)
         part_info_display_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", width=350)
@@ -475,7 +478,7 @@ class MainWindow:
         self.manage_subtitle.pack(pady=10)
 
         # search box
-        self.manage_search_box = ctk.CTkEntry(self.manage_parts_frame, height=28, width=500, placeholder_text="Part number or user ID")
+        self.manage_search_box = ctk.CTkEntry(self.manage_parts_frame, height=28, width=500, placeholder_text="Part UPC or User ID")
         self.manage_search_box.pack(pady=20)
 
         # buttons that run under the search box
@@ -486,15 +489,17 @@ class MainWindow:
         button_form = {"master": thin_frame, "width": 100, "height": 32}
         button_pack = {"side": "left", "padx": 10}
 
-        ctk.CTkButton(**button_form, text="+ Add", command=self.add_part).pack(**button_pack)
+        # delete, edit, and print buttons (print disappears for users)
         ctk.CTkButton(**button_form, text="️🗑 Delete", command=self.remove_part).pack(**button_pack)
         ctk.CTkButton(**button_form, text="🖉 Edit", command=self.edit_part_form).pack(**button_pack)
         self.print_button = ctk.CTkButton(**button_form, text="🖨 Print", command=self.print_label)
         self.print_button.pack(**button_pack)
 
-        ###################
-        # home
-        ###################
+        # or add a part
+        ctk.CTkLabel(self.manage_parts_frame, text="or", font=subtitle).pack(pady=20)
+        self.add_part = ctk.CTkButton(self.manage_parts_frame, text="+ Add a part", command=self.add_part, height=32)
+        self.add_part.pack()
+
         self.home_frame_base = ctk.CTkFrame(self.workspace)
         self.home_frame = ctk.CTkScrollableFrame(self.home_frame_base)
         self.home_frame_base.grid(row=0, column=0, sticky="news")
@@ -725,6 +730,7 @@ class MainWindow:
     @handle_exceptions
     def checkout_finalize(self, force=False):
         """take the upc and user id and check out the part."""
+
         user = self.checkout_selected_user.get()
 
         if user not in self.reverse_users.keys() or user.lower() == "no matching items":
@@ -732,13 +738,20 @@ class MainWindow:
             return
 
         uid = self.reverse_users[user]
-        upc = self.checkout_upc
+        upc = self.selected_part_key
+        print("upc:", upc, "uid:", uid, "force:", force)
 
         result = self.controller.part_checkout(upc, uid, force)
 
         if result == "-CHECKOUT_SUCCESS-":
             self.popup_msg("Part checked out successfully", "success")
-            self.checkout_frame.tkraise()
+            tmp_key = self.selected_part_key
+            self.raise_search("part", select=tmp_key)
+
+            def reselect(): self.list_button_select(tmp_key)
+
+            self.window.after(1000, reselect)
+            print("tried to reselect")
         else:
             # if the part is already checked out by someone else
 
@@ -802,10 +815,14 @@ class MainWindow:
 
     @handle_exceptions
     def edit_part_form(self):
-        """edit the information on the selected part"""
-        if not self.selected_part:
-            self.popup_msg("Please select a part to edit.")
-            return
+        """edit the information on the selected part or user"""
+        # from when search and manage where on the same tab
+        # if not self.selected_part:
+        #     self.popup_msg("Please select a part to edit.")
+        #     return
+
+        user_id = self.get_user_input()
+        if user_id == "-QUIT-": return
 
         self.form_mode_add = False  # set the form to edit mode and not add mode
 
@@ -821,16 +838,51 @@ class MainWindow:
             self.new_user_form.tkraise()
             for name, entry in self.add_user_entries.items():
                 entry.delete(0, "end")
+                print(str(data))
                 entry.insert(0, data[name])
+
+    @handle_exceptions
+    def get_user_input(self):
+        id_upc = self.manage_search_box.get()
+
+        # go ahead and complain if there is nothing in the field
+        if not id_upc:
+            self.popup_msg("Please enter a valid id/upc")
+            return "-QUIT-"
+
+            # make sure the part exists
+        if self.search_mode == "part":
+            if (len(id_upc) != 12) or (not self.controller.part_search(search_term=id_upc, search_columns={"part_upc": True})):
+                print("delete invalid")
+                self.popup_msg("We couldn't find this part UPC")
+                return "-QUIT-"
+        else:
+            results = self.controller.user_search(id_upc, columns={"user_id": True})
+            print("\t\t\t\tFIRED!", results)
+            found = False
+
+            for line in results:
+                if line == id_upc:
+                    print(line,"==",id_upc,":",line==id_upc)
+                    found = True
+                    break
+
+            if not found:
+                self.popup_msg("We couldn't find user "+str(id_upc))
+                return "-QUIT-"
+
+        return id_upc
 
     @handle_exceptions
     def remove_part(self):
         """delete the selected part or user"""
-        self.popup_prompt(message=f"Delete {self.search_mode} {self.selected_part_key}?")
-        if self.prompt_response == "No" or self.prompt_response == "Cancel":
-            return
+        # get the user input from the search box
+        id_upc = self.get_user_input()
 
-        result = self.controller.delete_generic(self.selected_part_key, self.search_mode)
+        self.popup_prompt(message=f"Delete {self.search_mode} {self.selected_part_key}?")
+        if id_upc == "-QUIT-" or self.prompt_response == "No": return
+
+        result = self.controller.delete_generic(id_upc, self.search_mode)
 
         if result == "-PARTS_STILL_CHECKED_OUT-":
 
@@ -838,13 +890,14 @@ class MainWindow:
 
             self.popup_prompt(message=f"Warning!\n{warning_msg}\nWould you like to return checked out part(s)?")
             if self.prompt_response.lower() == "yes" or self.prompt_response.lower() == "confirm":
-                self.controller.clear_checkout(self.selected_part_key)
-                self.controller.delete_generic(self.selected_part_key, self.search_mode)
+                self.controller.clear_checkout(id_upc)
+                self.controller.delete_generic(id_upc, self.search_mode)
             else:
                 return
 
-        self.list_button_select()
-        self.update_search()
+        # things from before the manage users/parts were separated from the search
+        # self.list_button_select()
+        # self.update_search()
 
         self.popup_msg(f"Deleted {self.search_mode} {self.selected_part.cget('text')}", popup_type="success")
 
@@ -853,6 +906,10 @@ class MainWindow:
         """either updates (edit mode) or adds (add mode) a new part depending on the submit mode"""
         # get the fields
         fields = []
+
+        print("\t\t\tsearch mode:",self.search_mode)
+        print("\t\t\tform mode add:",self.form_mode_add)
+        print("\1\2\3\4\5\6\7\0")
 
         if self.search_mode == "part":
             entries = self.add_part_entries
@@ -883,7 +940,7 @@ class MainWindow:
             try:
                 if self.search_mode == "part":
                     result = self.controller.add_part(fields[3], *fields[:3], *fields[4:])
-                    self.print_label(result)
+                    # self.print_label(result)
                 else:
                     result = self.controller.add_user(*fields)
 
@@ -898,7 +955,6 @@ class MainWindow:
                         self.add_user_entries["Last name"].configure(border_color=red)
                         return
 
-
             except p2er.UniqueViolation:
                 # self.popup_msg("this placement already exists! to change the quantity of a part, select edit from the \"find a part\" tab.")
                 return
@@ -906,14 +962,30 @@ class MainWindow:
         # edit part mode
         else:
             if self.search_mode == "part":
-                selected_part_upc = self.selected_part.cget("text")
+                selected_part_upc = self.get_user_input()
+
+                # if they somehow got here but didn't have a valid upc? not sure how this would happen.
+                if selected_part_upc == "-QUIT-":
+                    self.raise_search("part")
+                    self.popup_msg("Invalid UPC")
+                    return
+
                 result = self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], url=fields[4])
 
                 if result == "-PLACEMENT_ALREADY_TAKEN-":
                     self.popup_msg("This placement location is already in use.")
                     return
             elif self.search_mode == "user":
-                result = self.controller.update_user(self.selected_part_key, *fields[0:3])
+                selected_part_key = self.get_user_input()
+
+                # if they somehow got here but didn't have a valid upc? not sure how this would happen.
+                if selected_part_key == "-QUIT-":
+                    self.raise_search("user")
+                    self.popup_msg("Invalid User ID")
+                    return
+
+                # try to update
+                result = self.controller.update_user(selected_part_key, *fields[0:3])
 
                 # if the database says that you can't do that
                 if result == "-NAME_ALREADY_TAKEN-":
@@ -924,6 +996,7 @@ class MainWindow:
                     return
 
         # self.raise_manage(self.search_mode)
+        print("\tRESULT:", result)
         self.raise_search(self.search_mode)
         self.list_button_select(database_key=result)
 
@@ -1027,11 +1100,12 @@ class MainWindow:
 
     @handle_exceptions
     def checkin_continue(self, *_):
-        # check for database connection
+        # check for database connection, a seleced part, and in part mode
         if not self.check_db_connection(): return
+        if not self.selected_part_key: return self.popup_msg("you need to select a part first!")
 
         # database checkin
-        upc = self.checkin_barcode.get()
+        upc = self.selected_part_key  # self.checkin_barcode.get()
         result = self.controller.part_checkin(upc)
 
         # clear the entry box
@@ -1043,12 +1117,21 @@ class MainWindow:
         else:
             self.popup_msg(result)
 
+        self.list_button_select()
+
     @handle_exceptions
     def checkout_continue(self, *_):
+        """check out a part. Was originally the second step after scanning the part code"""
+
+        # if a part is not selected, you can't check out
+        if not self.selected_part_key:
+            self.popup_msg("You need to select a part first!")
+            return
+
         # check for database connection
         if not self.check_db_connection(): return
 
-        upc = self.checkout_barcode.get()
+        upc = self.selected_part_key
 
         if not self.controller.upc_exists(upc):
             self.popup_msg("UPC code not found in database")
@@ -1075,6 +1158,10 @@ class MainWindow:
     def raise_manage(self, search_type):
         """raise the page for either the user or part management page"""
 
+        # clear out the input box
+        if self.manage_search_box.get():
+            self.manage_search_box.delete("0", "end")
+
         # try again to connect to the database
         if (not self.controller) or self.controller.cursor_exists():
             self.db_connect()
@@ -1085,23 +1172,28 @@ class MainWindow:
         else:
             raise Exception("Invalid search type: Must be either 'user' or 'part'. This is most likely a backend issue.")
 
+        # change text of some elements
+        id_type = "the User ID" if self.search_mode == "user" else "or scan the UPC"
+        self.manage_subtitle.configure(text=f"Enter {id_type} of the {self.search_mode} that you would like to configure, or click \"Add\"")
+        self.add_part.configure(text=f"+ Add a {self.search_mode.title()}")  # add a [part/user] button
+
         # show/hide the print button
         if search_type == "user":
             self.print_button.pack_forget()
             self.manage_title.configure(text="Mange Users")
-            self.manage_subtitle.configure(text="Enter the user ID of the user that you would like to configure, or click \"Add\"")
         else:
             self.print_button.pack(side="left", padx=10)
             self.manage_title.configure(text="Mange Parts")
-            self.manage_subtitle.configure(text="Enter/scan the upc of the part that you would like to configure, or click \"Add\"")
 
         # raise the management frame
         self.manage_parts_frame.tkraise()
 
-
     @handle_exceptions
-    def raise_search(self, search_type):
+    def raise_search(self, search_type, select=None):
         """clear the search box and raise either 'part search' or 'user search' depending on the search_type"""
+
+        # clear the selected part key, as no part is selected
+        self.selected_part_key = None
 
         # try again to connect to the database
         if (not self.controller) or self.controller.cursor_exists():
@@ -1135,14 +1227,14 @@ class MainWindow:
                 names_dict = {part[0]: part[1:] for part in parts}
             elif self.search_mode == "user":
                 names_dict = self.controller.user_search(search, use_full_names=True)
-                parts = names_dict.keys()
+                parts = list(names_dict.keys())
             else:
                 raise Exception("the search mode is not set to either part or user.")
 
             # add the parts into the scrolling frame
             for index, part in enumerate(parts):
                 if isinstance(part, (tuple, list)):
-                    name_text = list_button_format(part)
+                    name_text = list_button_format(part) if list(part)[0] != "No matching items" else "No matching items"
                     part = part[0]
                 else:
                     name_text = str(names_dict[part])
@@ -1176,20 +1268,23 @@ class MainWindow:
     @handle_exceptions
     def list_button_select(self, button_index=None, database_key=None):
         """select the targeted part and update the results accordingly"""
-        print("list_button_select called")
-        print("button_index:", button_index, "database_key:", database_key)
+        print("got a select promgpt")
         if not database_key:
             database_key = self.selected_part_key
 
         if not button_index:
             for i, button in enumerate(self.part_widgets):
-                print("about to call _int")
                 if _int(button.cget("text")) == _int(database_key):
                     button_index = i
 
-        if not button_index: print("no button index")
+        if not button_index:
+            print("no button index")
+            # return
 
-        button = self.part_widgets[button_index]
+        try:
+            button = self.part_widgets[button_index]
+        except:
+            return
 
         if database_key.lower() == "no matching items":
             return
@@ -1262,3 +1357,5 @@ class MainWindow:
         button.configure(fg_color="#1f6ba5")
         self.selected_part = button
         self.selected_part_key = database_key
+
+        print("finished select prompt")

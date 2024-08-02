@@ -221,6 +221,14 @@ class Organizer:
         self.cursor.execute(search_sql)
         return self.cursor.fetchall()[0][0]
 
+    def name_from_user_id(self, user_id):
+        search_sql = f"SELECT first_name, last_name FROM users WHERE user_id = '{user_id}'"
+        self.cursor.execute(search_sql)
+        results = self.cursor.fetchall()
+
+        print("RESULTS FOR NAME:", results)
+        return results[0] if results else None
+
     def upc_exists(self, upc):
         """check a upc to see if it exists in the database"""
         self.cursor.execute(f"SELECT * FROM parts WHERE part_upc = {upc}")
@@ -705,6 +713,7 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr}"""
         parts_out = self.cursor.fetchall()
 
         for part in parts_out:
+            print(part[0])
             self.part_checkin(part[0])
 
         self.conn.commit()
@@ -723,6 +732,7 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
     def delete_generic(self, key, keyword):
         """delete the selected item on the list"""
         self.refresh_cursor()  # still don't know if this was actually the fix
+        print("key, keyword:", key, keyword)
 
         # get the table from the keyword
         location = {
@@ -860,6 +870,8 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}""
         """check a part back in"""
         # what to put at the end of the popup
         pos_message = " Please return part to "
+
+        print(upc)
 
         # also get the part location and add it to the message
         search_sql = f"SELECT part_placement FROM parts WHERE part_upc = {upc}"
@@ -1134,6 +1146,7 @@ WHERE checked_out_part = {part_id}"""
         results, as "John" is the first_name column and "Doe" is the last_name
         column.
         """
+
         # add each filter if it exists
         # filters in order: "DESC", "MFR", "MFR_PN", "LOC"
         connector = "WHERE"
@@ -1232,8 +1245,7 @@ JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
         if not more_info:
             return [str(item).zfill(12) for item in results]
         else:
-            print(results[0])
-            print(results[0][0])
+            if results[0] == "No matching items": results = [tuple(["No matching items" for i in range(3)])]
 
             return [
                 (str(item[0]).zfill(12),
@@ -1243,7 +1255,6 @@ JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
 
     def part_exists(self, pn):
         self.cursor.execute(f"SELECT part_upc FROM parts WHERE part_upc = {pn}")
-        print(self.cursor.fetchall())
         return bool(self.cursor.fetchall()[0])
 
     def part_data(self, target_upc, raw=False):
@@ -1304,7 +1315,6 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
     # users
     def user_search(self, search_term, columns=None, use_full_names=False):
         """get the matching user ids to a search term"""
-
         if not columns:
             columns = {
                 "user_id": True,
@@ -1317,12 +1327,16 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
         search_sql = f"""
 SELECT user_id, first_name, last_name FROM users
 """
-
         results_table = self.search_general(search_sql, search_term, columns, raw_table=True)
         results_dict = {row[0]: " ".join(row[1:]) for row in results_table}
 
-        if use_full_names: return results_dict
-        else: return results_dict.keys()
+        print('"'+list(results_dict.keys())[0]+'"', "==", "\" \":", list(results_dict.keys())[0] == " ")
+
+        if list(results_dict.keys())[0] == " ":
+            print("in the if", list(results_dict.keys()))
+            return {"No matching items": "No matching items"}
+        elif use_full_names: return results_dict
+        else: return list(results_dict.keys())
 
     def user_data(self, target_id, raw=False):
         """get the user information for a user id"""
