@@ -9,9 +9,9 @@ app.window.mainloop()
 #       * tried to reselect
 #       * got select prompt
 #       * did not finish select function
-#  [ ] manage parts add info box
-#  [ ] back button on checkout
-#  [ ] users says search for parts
+#  [ ] manage parts/ users add info box [wait for confirmation]
+#  [X] back button on checkout
+#  [X] users says search for parts
 #  [ ] more spreadsheet like search
 #  [ ] mfr id as search
 #  [ ] search text cutting

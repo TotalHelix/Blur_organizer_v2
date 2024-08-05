@@ -304,6 +304,9 @@ class MainWindow:
         input_frame = ctk.CTkFrame(self.checkout_frame)
         input_frame.pack(pady=10, padx=40, fill="x")
 
+        # back button
+        ctk.CTkButton(input_frame, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=lambda: self.raise_search("part")).pack(fill="x", padx=40, pady=20)
+
         # Entry Field for Barcode Scanning or Manual Input
         self.checkout_barcode = ctk.CTkEntry(
             input_frame,
@@ -324,7 +327,8 @@ class MainWindow:
         self.checkout_user_frame = ctk.CTkFrame(self.workspace)
         self.checkout_user_frame.grid(row=0, column=0, sticky="news")
 
-        margin(self.checkout_user_frame)
+        # back button
+        ctk.CTkButton(self.checkout_user_frame, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=lambda: self.raise_search("part")).pack(fill="x", padx=40, pady=20)
 
         # explainer text
         ctk.CTkLabel(self.checkout_user_frame, text="Please select your account", font=title).pack(pady=10)
@@ -1210,6 +1214,8 @@ class MainWindow:
 
         # configure app to new search type
         self.search_mode = search_type
+
+        self.search_box.configure(placeholder_text=f"Search for a {self.search_mode}")
 
         # clear leftover data
         self.search_box.delete("0", "end")
