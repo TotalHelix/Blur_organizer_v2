@@ -748,9 +748,9 @@ class MainWindow:
             tmp_key = self.selected_part_key
             self.raise_search("part", select=tmp_key)
 
-            def reselect(): self.list_button_select(tmp_key)
+            def reselect(): self.list_button_select(database_key=tmp_key)
 
-            self.window.after(1000, reselect)
+            self.window.after(10, reselect)
             print("tried to reselect")
         else:
             # if the part is already checked out by someone else
@@ -1104,6 +1104,12 @@ class MainWindow:
         if not self.check_db_connection(): return
         if not self.selected_part_key: return self.popup_msg("you need to select a part first!")
 
+        self.popup_prompt("Return part "+self.selected_part_key+"?")
+        print(self.prompt_response)
+        if self.prompt_response != "Yes":
+            print("user picked no")
+            return
+
         # database checkin
         upc = self.selected_part_key  # self.checkin_barcode.get()
         result = self.controller.part_checkin(upc)
@@ -1282,11 +1288,16 @@ class MainWindow:
             # return
 
         try:
+            print("button info:")
+            print("\tpart widgets:", self.part_widgets)
+            print("\tbutton index:", button_index)
             button = self.part_widgets[button_index]
         except:
+            print("couldn't get a button, returning")
             return
 
         if database_key.lower() == "no matching items":
+            print("no matching items, returning")
             return
 
         # un-highlight the old selection
@@ -1296,6 +1307,7 @@ class MainWindow:
         # get the info for the selected part
         if self.search_mode == "part":
             part_info = self.controller.part_data(database_key)
+            print("part info got")
         else:
 
             # if the database key given is a name, convert it to a user id

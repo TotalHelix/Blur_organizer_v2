@@ -5,7 +5,7 @@ app = MainWindow()
 app.window.mainloop()
 
 # TODO:
-#  [ ] check in/ check out to search menu [1/2]
+#  [X] check in/ check out to search menu [1/2]
 #       * tried to reselect
 #       * got select prompt
 #       * did not finish select function
