@@ -303,13 +303,14 @@ class Organizer:
 
             "parts":
                 [
-                    # name                  data type       len     primary key references           extra tags
-                    ["part_upc",            "bigint",       None,   True,       None,               "NOT NULL"],
-                    ["part_placement", "varchar", "4", False, None, "NOT NULL"],  # UNIQUE"],
-                    ["mfr_pn", "varchar", "255", False, None, ""],
-                    ["part_mfr", "varchar", "255", False, 'manufacturers; mfr_id', "NOT NULL"],
-                    ["part_desc", "varchar", None, False, None, "NOT NULL"],
-                    ["url", "varchar", None, False, None, ""]
+                    # name                  data type                       len     primary key references                  extra tags
+                    ["part_upc",            "bigint",                       None,   True,       None,                       "NOT NULL"],
+                    ["part_placement",      "varchar",                      "4",    False,      None,                       "NOT NULL"],  # UNIQUE"],
+                    ["mfr_pn",              "varchar",                      "255",  False,      None,                       "NOT NULL"],
+                    ["part_mfr",            "varchar",                      "255",  False,      'manufacturers; mfr_id',    "NOT NULL"],
+                    ["part_desc",           "varchar",                      None,   False,      None,                       "NOT NULL"],
+                    ["url",                 "varchar",                      None,   False,      None,                       ""],
+                    ["date_added",          "timestamp without time zone",  None,   None,       None,                       "NOT NULL"]
                 ],
 
             "part_locations":
@@ -633,7 +634,9 @@ class Organizer:
                 else:
                     break
             # pick a manufacturing part number
-            mfr_pn = hex(randint(1000000000, 999999999999999999))
+            mfr_pn = ""
+            for i in range(randint(4, 18)):
+                mfr_pn += str(randint(0, 9))
             # pick a manufacturer
             mfr = choice(self.get_rows("mfr_id"))
             # come up with a description
@@ -655,7 +658,10 @@ class Organizer:
             # current date
             upc += date.today().strftime("%m%d%y")
 
-            sql = f"INSERT INTO parts VALUES ({upc}, '{placement}', '{mfr_pn}', '{mfr}', '{desc}', '{url}')"
+            added_date = datetime.fromtimestamp(randint(0, 1826244364))
+            added_str = added_date.strftime("%Y-%m-%d %H:%M:") + str(randint(0, 59999999) / 1000000)
+
+            sql = f"INSERT INTO parts VALUES ({upc}, '{placement}', '{mfr_pn}', '{mfr}', '{desc}', '{url}', '{added_str}')"
             self.cursor.execute(sql)
 
             # change the mfr table to display the number of parts
@@ -831,8 +837,10 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
         if url == "": url = None
         elif not url.startswith("https://"): url = "https://"+url
 
+        date_added = datetime.today().strftime("%Y-%m-%d %H:%M:")
+
         # ----- perform the insertion 😈
-        sql = f"INSERT INTO parts VALUES ({upc}, '{safe_placement}', '{safe_mfr_pn}', '{mfr_id}', '{safe_desc}', '{url}')"
+        sql = f"INSERT INTO parts VALUES ({upc}, '{safe_placement}', '{safe_mfr_pn}', '{mfr_id}', '{safe_desc}', '{url}', '{date_added}')"
         self.cursor.execute(sql)
 
         # change the mfr table to display the number of parts
@@ -1238,20 +1246,21 @@ WHERE checked_out_part = {part_id}"""
             }
 
         search_sql = f"""
-SELECT part_upc, mfr_name, part_desc FROM parts 
+SELECT mfr_pn, mfr_name, part_upc FROM parts 
 JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
 """
         results = self.search_general(search_sql, search_term, search_columns)
         if not more_info:
-            return [str(item).zfill(12) for item in results]
+            return [str(item[2]).zfill(12) for item in results]
         else:
             if results[0] == "No matching items": results = [tuple(["No matching items" for i in range(3)])]
 
-            return [
-                (str(item[0]).zfill(12),
-                 item[1],
-                 item[2])
-                for item in results]
+            return [[str(row[2]).zfill(12), row[0], row[1]] for row in results]
+
+    def upc_from_mfrpn(self, mfr_pn):
+        """get the upc cade of a part if you have the mfr id"""
+        self.cursor.execute(f"SELECT part_upc FROM parts WHERE mfr_id = '{mfr_pn}'")
+        return self.cursor.fetchall()
 
     def part_exists(self, pn):
         self.cursor.execute(f"SELECT part_upc FROM parts WHERE part_upc = {pn}")
@@ -1261,7 +1270,7 @@ JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
         """get the part information for a upc code"""
         # sql to search for search term
         search_sql = f"""
-SELECT part_upc, part_placement, mfr_name, mfr_pn, part_desc, url FROM parts 
+SELECT part_upc, part_placement, mfr_name, mfr_pn, part_desc, url, date_added FROM parts 
 JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
 WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
         self.cursor.execute(search_sql)
@@ -1304,7 +1313,8 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
             "Currently checked out by": checkout_holder,
             # "Quantity": search_results[5],
             "Description": search_results[4],
-            "Link to original part": search_results[5]
+            "Link to original part": search_results[5],
+            "Date added": search_results[6].strftime("%b %d, %Y - %I:%M %p")
         }
 
         # return raw results if requested

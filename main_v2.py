@@ -12,6 +12,6 @@ app.window.mainloop()
 #  [ ] manage parts/ users add info box [wait for confirmation]
 #  [X] back button on checkout
 #  [X] users says search for parts
-#  [ ] more spreadsheet like search
-#  [ ] mfr id as search
-#  [ ] search text cutting
+#  [X] more spreadsheet-like search
+#  [X] mfr-pn as search
+#  [X] search text cutting

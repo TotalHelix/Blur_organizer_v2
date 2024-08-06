@@ -23,35 +23,26 @@ def list_button_format(text):
     """
     Takes a tuple of part (number, mfr, desc) and turns it into a single string to print on list buttons
 
-    :param text: tuple or list (pn, mfr, desc) that will be formatted
+    :param text: tuple or list (mfr_pn, mfr_name) that will be formatted
     :return: string formatted text
     """
     if not isinstance(text, (tuple, list)):
         raise("list_button_format requires a tuple argument, but received", type(text))
 
-    return f"{text[0]} ({text[1]})"  # TODO either remove this or everything after it
+    parts = []
+    lengths = [21, 16]
 
-    # maximum length of each section
-    max_lengths = [13, 13, 4]
-
-    final_string = ""
-
-    for i, item in enumerate(text):
-        print("index:", i)
-        if len(str(item)) > max_lengths[i]:
-            new_string = str(item)[:max_lengths[i]-3]+"..."
+    for i, seg_len in enumerate(lengths):
+        if len(text[i]) > seg_len:
+            parts.append(text[i][:seg_len-3]+"...")
         else:
-            new_string = str(item)
-        final_string += f'{new_string: <{max_lengths[i]}}'
+            parts.append(text[i])
 
-    return final_string
+    return f"{parts[0]: <{lengths[0]}} {parts[1]: <{lengths[1]}}"
 
 
 def _int(string):
     """turns a string into an int if the string can become an int"""
-    print("all string seg:", string.split()[0])
-    print("string part:", string.split()[0])
-
     if string.isnumeric():
         return int(string)
     elif string.split()[0].isnumeric():
@@ -391,9 +382,15 @@ class MainWindow:
         self.find_part.rowconfigure(2, weight=0)
 
         # left side (search, results, add button)
-        self.search_box = ctk.CTkEntry(self.find_part, placeholder_text="Search for a part", width=200)
-        self.search_box.grid(row=0, column=0, sticky="nsew", padx=40, pady=20)
+        self.top_frame = ctk.CTkFrame(self.find_part, fg_color="transparent")
+        self.top_frame.grid(row=0, column=0, sticky="nsew", padx=40)
+
+        self.search_box = ctk.CTkEntry(self.top_frame, placeholder_text="Search for a part", width=300)
+        self.search_box.pack(pady=20, side="top")
         self.search_box.bind("<KeyRelease>", self.update_search)
+
+        self.search_labels = ctk.CTkLabel(self.top_frame, text="filler text, edit in the raise_search function", fg_color="#454547")
+        self.search_labels.pack(side="top", fill="x", expand=True)
 
         self.result_parts = ctk.CTkScrollableFrame(self.find_part, width=200)
         self.result_parts.grid(row=1, column=0, sticky="nsew", padx=40, pady=0)
@@ -752,6 +749,7 @@ class MainWindow:
             tmp_key = self.selected_part_key
             self.raise_search("part", select=tmp_key)
 
+            print("reselect with", tmp_key)
             def reselect(): self.list_button_select(database_key=tmp_key)
 
             self.window.after(10, reselect)
@@ -908,12 +906,7 @@ class MainWindow:
     @handle_exceptions
     def submit_controller(self):
         """either updates (edit mode) or adds (add mode) a new part depending on the submit mode"""
-        # get the fields
         fields = []
-
-        print("\t\t\tsearch mode:",self.search_mode)
-        print("\t\t\tform mode add:",self.form_mode_add)
-        print("\1\2\3\4\5\6\7\0")
 
         if self.search_mode == "part":
             entries = self.add_part_entries
@@ -1215,6 +1208,12 @@ class MainWindow:
         # configure app to new search type
         self.search_mode = search_type
 
+        # search header
+        if self.search_mode == "part":
+            self.search_labels.configure(text="  Part Number\t\tManufacturer", anchor="w")
+        else:
+            self.search_labels.configure(text="Name", anchor="center")
+
         self.search_box.configure(placeholder_text=f"Search for a {self.search_mode}")
 
         # clear leftover data
@@ -1236,7 +1235,8 @@ class MainWindow:
             search = self.search_box.get()
             if self.search_mode == "part":
                 parts = self.controller.part_search(search)
-                names_dict = {part[0]: part[1:] for part in parts}
+                names_dict = {part[0]: (part[1], part[2]) for part in parts}
+                parts = [part[0] for part in parts]
             elif self.search_mode == "user":
                 names_dict = self.controller.user_search(search, use_full_names=True)
                 parts = list(names_dict.keys())
@@ -1245,15 +1245,15 @@ class MainWindow:
 
             # add the parts into the scrolling frame
             for index, part in enumerate(parts):
-                if isinstance(part, (tuple, list)):
-                    name_text = list_button_format(part) if list(part)[0] != "No matching items" else "No matching items"
-                    part = part[0]
+                if part.isnumeric():
+                    button_text = names_dict[part]
+                    name_text = list_button_format(button_text) if list(part)[0] != "No matching items" else "No matching items"
                 else:
                     name_text = str(names_dict[part])
 
                 part_widget = ctk.CTkButton(
                     self.result_parts, text=name_text, anchor="w", fg_color="transparent",
-                    hover=not part.lower() == "no matching items",
+                    hover=not part == "No matching items", font=("Roboto Mono", 12),
                     command=lambda i=index, p=str(part): self.list_button_select(i, p)
                 )
                 part_widget.pack(fill="x", expand=True)
@@ -1288,6 +1288,7 @@ class MainWindow:
             for i, button in enumerate(self.part_widgets):
                 if _int(button.cget("text")) == _int(database_key):
                     button_index = i
+                    break
 
         if not button_index:
             print("no button index")
@@ -1357,7 +1358,7 @@ class MainWindow:
                     self.make_link_button(yet_another_frame, pn)
             elif key.lower() != "no results":
                 # normal value boxes, skipping "no matching items".
-                make_box(item_frame, value, key.lower() == "description")
+                make_box(item_frame, value, key == "Description")
 
             # jump to reference button
             if key.lower() == "currently checked out by" and value.lower() != "not checked out":
