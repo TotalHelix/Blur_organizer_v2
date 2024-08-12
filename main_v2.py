@@ -5,13 +5,7 @@ app = MainWindow()
 app.window.mainloop()
 
 # TODO:
-#  [X] check in/ check out to search menu [1/2]
-#       * tried to reselect
-#       * got select prompt
-#       * did not finish select function
-#  [ ] manage parts/ users add info box [wait for confirmation]
-#  [X] back button on checkout
-#  [X] users says search for parts
-#  [X] more spreadsheet-like search
-#  [X] mfr-pn as search
-#  [X] search text cutting
+#  [ ] manage parts/ users add info box [got confirmation]
+#  [ ] more spreadsheet-like search
+#  [ ] error when editing a part? (can't replicate)
+#  [X] we actually want a fullscreen app (hahah i knew that)

@@ -1,3 +1,4 @@
+import math
 from os import remove as os_remove
 import tkinter as tk
 import urllib
@@ -17,36 +18,75 @@ color_red = {"fg_color": red, "hover_color": "#781610"}
 color_green = {"fg_color": green, "hover_color": "#0f4f22"}
 title = ("Arial", 30, "bold")
 subtitle = ("Ariel", 18)
+listbutton_font = ("Roboto Mono", 12)
 
 
-def list_button_format(text):
+def make_floating_frame(master, return_frame=False, scrolling_frame=False):
     """
-    Takes a tuple of part (number, mfr, desc) and turns it into a single string to print on list buttons
+    makes a frame that sits in the middle of other frames, so that it scales when the window is fullscreen.
 
-    :param text: tuple or list (mfr_pn, mfr_name) that will be formatted
+    :param return_frame: whether the border frame is returned, default is False.
+    :param master: the frame the floating frame is made in.
+    :param scrolling_frame: if True, the frame will be a scrolling frame, otherwise it will be a normal frame.
+    :returns: just the interior frame if return_frame is False, otherwise (border frame, interior frame)
+    """
+
+    outer = ctk.CTkFrame(master)
+    outer.grid(row=0, column=0, sticky="news")
+
+    outer.grid_rowconfigure(0, weight=1)
+    outer.grid_columnconfigure(0, weight=1)
+    outer.grid_columnconfigure(1, weight=4)
+    outer.grid_columnconfigure(2, weight=1)
+
+    if scrolling_frame:
+        inner = ctk.CTkScrollableFrame(outer, fg_color="transparent")
+    else:
+        inner = ctk.CTkFrame(outer, fg_color="transparent")
+    inner.grid(row=0, column=1, sticky="news")
+
+    if return_frame:
+        return outer, inner
+    else:
+        return inner
+
+
+def list_button_format(text, search_mode):
+    """
+    Takes a tuple of part and turns it into a single string to print on list buttons
+
+    :param text: tuple or list that will be formatted:
+            for parts: (mfr_pn, mfr_name, upc, date_added, placement, description)
+            for users: (user_id, full_name, email)
+    :param search_mode: format as part or as user
     :return: string formatted text
     """
     if not isinstance(text, (tuple, list)):
         raise("list_button_format requires a tuple argument, but received", type(text))
 
-    parts = []
-    lengths = [21, 16]
+    final_string = ""
+    if search_mode == "part":
+        lengths = [21, 16, 14, 12, 5, 53]
+    else:
+        lengths = [17, 22, 30]
 
     for i, seg_len in enumerate(lengths):
         if len(text[i]) > seg_len:
-            parts.append(text[i][:seg_len-3]+"...")
+            this_segment = text[i][:seg_len-3]+"..."
         else:
-            parts.append(text[i])
+            this_segment = text[i]
+        final_string += f"{this_segment: <{seg_len}} "
 
-    return f"{parts[0]: <{lengths[0]}} {parts[1]: <{lengths[1]}}"
+    return final_string
 
 
 def _int(string):
     """turns a string into an int if the string can become an int"""
+    if not string: return
+
     if string.isnumeric():
         return int(string)
     elif string.split()[0].isnumeric():
-        print("we got one?", int(string.split()[0]))
         return int(string.split()[0])
     else:
         return string
@@ -78,60 +118,6 @@ def margin(master):
     ctk.CTkLabel(master, text=" ", font=("Ariel", 1)).pack()
 
 
-def width_splice(text, font_size, max_width=650, use_dict=False):
-    """break text after a certain number of pixels in a font"""
-    # just skip if there's not any text
-    if text.isspace():
-        return " "
-
-    hyperlink_pattern = compile(r'\[(.*?)]\((.*?)\)')
-    hyperlink_segments = hyperlink_pattern.split(text)
-    true_words = {}
-    link_text = ""
-    for i, part in enumerate(hyperlink_segments):
-        if i % 3 == 0:  # normal text
-            for word in part.split(" "):
-                true_words[word] = word
-        elif i % 3 == 1:  # hyperlinked text
-            link_text = part.strip(" ")
-        elif i % 3 == 2:  # link
-            hyperlink = part.strip(" ")
-
-            true_words[link_text] = f"[{link_text}]({hyperlink})"
-
-    font = ImageFont.truetype("arial.ttf", font_size)
-    lines = []
-    current_line = ""
-    current_width = 0
-
-    for word, full_word in true_words.items():
-        if "\n" in word:
-            current_width = 0
-
-        word_width = font.getlength(word + " ")
-        if current_width + word_width <= max_width:
-            current_line += full_word + " "
-            current_width += word_width
-        else:
-            # lines.append(current_line.strip(" "))
-            lines.append(current_line)
-            current_line = word + " "
-            current_width = word_width
-
-    if current_line:
-        lines.append(current_line.strip(" "))
-
-    # don't break for hyperlinks
-    # for i, line in enumerate(lines):
-    #     if len(lines) > i + 2:
-    #         lines[i+1] = " ".join((line[i], lines[i+1]))
-    #         lines[i] = None
-
-    # lines = [line for line in lines if line]
-
-    return "\n".join(lines)
-
-
 def textbox_write(textbox, text):
     textbox.configure(state="normal")
     textbox.delete("0.0", "end")
@@ -142,7 +128,7 @@ def textbox_write(textbox, text):
 def stackable_frame(master, text, desc, button_text, command):
     """A stackable frame that has a title and description on the left, and a button on the right"""
     frame_house = ctk.CTkFrame(master, height=80)
-    frame_house.pack(fill="x", padx=40, pady=7)
+    frame_house.pack(fill="x", pady=7)
 
     frame_house.grid_columnconfigure(0, weight=5)
     frame_house.grid_columnconfigure(1, weight=1)
@@ -179,6 +165,15 @@ def handle_exceptions(func):
     return wrapper
 
 
+class ButtonWithVar(ctk.CTkButton):
+    def __init__(self, master, var_value, **kwargs):
+        self.button = super().__init__(master, **kwargs)
+        self.var = tk.StringVar(self.button, value=var_value)
+
+    def get_var(self):
+        return self.var.get()
+
+
 class MainWindow:
     """The whole window that does all of everything"""
     def __init__(self):
@@ -190,8 +185,9 @@ class MainWindow:
         self.window = ctk.CTk()
         self.window.geometry("1000x700")
         self.window.grid_columnconfigure(1, weight=1)
-        self.window.grid_rowconfigure(0, weight=1)
-        self.window.resizable(False, False)
+        self.window.grid_rowconfigure(0, weight=0)
+        self.window.grid_rowconfigure(1, weight=1)
+        # self.window.resizable(False, False)
         self.window.title("Blur Part Organizer")
         self.popup_counter = 0
         self.form_mode_add = True
@@ -209,7 +205,7 @@ class MainWindow:
 
         # left column
         l_col = ctk.CTkFrame(self.window, fg_color="transparent")
-        l_col.grid(row=0, column=0, padx=10, pady=10, sticky="ns")
+        l_col.grid(row=1, column=0, padx=10, pady=10, sticky="ns")
         side_buttons = {
             # these have to be lambda again because the frames haven't been defined yet.
             "Home": self.raise_home_frame,
@@ -225,9 +221,20 @@ class MainWindow:
         danger_zone_button = ctk.CTkButton(l_col, **color_red, text="Danger Zone", command=lambda: self.danger_zone.tkraise())
         danger_zone_button.pack(side=ctk.BOTTOM, padx=10, pady=11)
 
+        # fullscreen menu bar
+        self.menu_bar = ctk.CTkFrame(self.window, fg_color="transparent")
+        self.menu_bar.grid(row=0, column=0, columnspan=2, sticky="nsew")
+
+        menu_button = {"fg_color": "transparent", "height": 20, "width": 30, "font": ("Arial", 15), "hover": False}
+        menu_pack = {"side": "right", "padx": 15}
+
+        ctk.CTkButton(self.menu_bar, text="✕", command=quit, **menu_button).pack(**menu_pack)
+        ctk.CTkButton(self.menu_bar, text="🗖", command=lambda: self.window.attributes('-fullscreen', True), **menu_button).pack(**menu_pack)
+        ctk.CTkButton(self.menu_bar, text="🗕", command=lambda: self.window.wm_state("iconic"), **menu_button).pack(**menu_pack)
+
         # workspace
         self.workspace = ctk.CTkFrame(self.window)
-        self.workspace.grid(row=0, column=1, padx=10, pady=10, sticky="news")
+        self.workspace.grid(row=1, column=1, padx=10, pady=10, sticky="news")
         self.workspace.grid_rowconfigure(0, weight=1)
         self.workspace.grid_columnconfigure(0, weight=1)
 
@@ -357,10 +364,10 @@ class MainWindow:
         ###################
         # danger zone
         ###################
-        self.danger_zone = ctk.CTkFrame(self.workspace)
-        self.danger_zone.grid(row=0, column=0, sticky="news")
+        _, danger_zone_middle = make_floating_frame(self.workspace, return_frame=True)
+        self.danger_zone = _
 
-        margin(self.danger_zone)
+        margin(danger_zone_middle)
 
         data = [  # Title, Description, Button text, command
             ("Format Database", "resets the database with all default tables", "Format", self.format_database),
@@ -368,7 +375,7 @@ class MainWindow:
         ]
 
         for args in data:
-            stackable_frame(self.danger_zone, *args)
+            stackable_frame(danger_zone_middle, *args)
 
         ###################
         # search gui
@@ -389,20 +396,20 @@ class MainWindow:
         self.search_box.pack(pady=20, side="top")
         self.search_box.bind("<KeyRelease>", self.update_search)
 
-        self.search_labels = ctk.CTkLabel(self.top_frame, text="filler text, edit in the raise_search function", fg_color="#454547")
+        self.search_labels = ctk.CTkLabel(self.top_frame, text="filler text, edit in the raise_search function", fg_color="#454547", font=listbutton_font)
         self.search_labels.pack(side="top", fill="x", expand=True)
 
-        self.result_parts = ctk.CTkScrollableFrame(self.find_part, width=200)
+        self.result_parts = ctk.CTkScrollableFrame(self.find_part, width=800)
         self.result_parts.grid(row=1, column=0, sticky="nsew", padx=40, pady=0)
         self.part_widgets = []
         self.selected_part = None
 
         # buttons that run along the bottom
-        thin_frame = ctk.CTkFrame(self.find_part, fg_color="transparent")  # , height=25)   # add this back if you want a blank margin with no buttons
-        thin_frame.grid(column=0, row=2, columnspan=2, sticky="NEWS", padx=27)
+        self.thin_frame = ctk.CTkFrame(self.find_part, fg_color="transparent")  # , height=25)   # add this back if you want a blank margin with no buttons
+        self.blank_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", height=20)
 
         for name, cmd in [("🛒 Check Out", self.checkout_continue), ("🔄 Return", self.checkin_continue)]:
-            ctk.CTkButton(thin_frame, text=name, width=100, height=32, command=cmd).pack(side="left", padx=15, pady=11)
+            ctk.CTkButton(self.thin_frame, text=name, width=100, height=32, command=cmd).pack(side="left", padx=15, pady=11)
 
         # right side (display part info)
         part_info_display_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", width=350)
@@ -501,24 +508,29 @@ class MainWindow:
         self.add_part = ctk.CTkButton(self.manage_parts_frame, text="+ Add a part", command=self.add_part, height=32)
         self.add_part.pack()
 
-        self.home_frame_base = ctk.CTkFrame(self.workspace)
-        self.home_frame = ctk.CTkScrollableFrame(self.home_frame_base)
-        self.home_frame_base.grid(row=0, column=0, sticky="news")
-        self.home_frame.pack(fill="both", expand=True)
+        a, b = make_floating_frame(self.workspace, return_frame=True, scrolling_frame=True)
+        self.home_frame_base = a
+        self.home_frame = b
 
-        margin(self.home_frame_base)
+        margin(self.home_frame)
 
         # include the readme (still part of home)
         try:
             # raise Exception("forced exception")
             try:
+                print("searching for file")
                 readme = open("README.md", "r")
                 document = "\n".join([s.rstrip() for s in readme.readlines()]).split("\n"*2)
-            except FileNotFoundError:
+                print("file found!")
+            except FileNotFoundError as err:
+                print(f"file not found? err: {err}")
+                print("trying to get request...")
                 readme = requests.get("https://github.com/TotalHelix/Blur_organizer_v2/raw/main/README.md").text
                 document = "\n".join([s.rstrip() for s in readme.split("\n")]).split("\n"*2)
+                print(f"finished requests. text: {document}")
 
             for line in document:
+                print("writing line", line)
                 line = line.replace("\n", " ")
 
                 # skip blank lines
@@ -527,15 +539,29 @@ class MainWindow:
 
                 # images
                 if line.startswith("![") and "](" in line and line.endswith(")"):
-                    # get the image link
                     image_link = line.split("](")[1].replace(")", "")
+                    alt_text = line.split("](")[0].replace("![", "")
+                    try:
+                        # TODO get rid of this line i guess
+                        # raise urllib.error.URLError("this is a long error to see if text wrapping works in this new image thing I did")
+                        # get the image link
 
-                    urllib.request.urlretrieve(image_link, "tmp.png")
-                    my_img = Image.open("tmp.png")
-                    ctk_image = ctk.CTkImage(light_image=my_img, dark_image=my_img, size=(my_img.width, my_img.height))
-                    ctk.CTkLabel(self.home_frame, image=ctk_image, text="", anchor="w").pack(fill="both", expand="yes", padx=45)
-                    os_remove("tmp.png")
-                    continue
+                        urllib.request.urlretrieve(image_link, "tmp.png")
+                        my_img = Image.open("tmp.png")
+                        ctk_image = ctk.CTkImage(light_image=my_img, dark_image=my_img, size=(my_img.width, my_img.height))
+                        ctk.CTkLabel(self.home_frame, image=ctk_image, text="", anchor="w").pack(fill="both", expand="yes", padx=45)
+                        os_remove("tmp.png")
+                        continue
+                    except urllib.error.URLError as err:
+                        # if the image can't load
+                        line_len = 40
+                        text = "\n".join((str(err) + " "*line_len)[i * line_len: (i+1) * line_len] for i in range(math.ceil(len(str(err))/line_len)))
+                        print(text)
+                        # ctk.CTkLabel(self.home_frame, width=300, height=300, text=f"We couldn't load this image. to see the image,\n click on the link below.", fg_color="#5e5e5e").pack()
+                        hyperlink = ctk.CTkLabel(self.home_frame, cursor="hand2", text=f"View Image \"{alt_text}\" in browser.", text_color="#a4a2f2", font=subtitle, anchor="w")
+                        hyperlink.pack(fill="both", expand=True, padx=25, pady=10)
+                        hyperlink.bind("<Button-1>", lambda _, l=image_link: self.open_reference(ref=l))
+                        continue
 
                 # format titles [start pos, font size]
                 info = [0, 14]
@@ -552,7 +578,7 @@ class MainWindow:
                 paragraph_frame = ctk.CTkFrame(self.home_frame, fg_color="transparent")
                 paragraph_frame.pack(pady=10, anchor="w")
 
-                for label_line in width_splice(label_text, info[1]).split("\n"):
+                for label_line in self.width_splice(label_text, info[1]).split("\n"):
                     line_frame = ctk.CTkFrame(paragraph_frame, fg_color="transparent")
                     line_frame.pack(padx=40, anchor="w")
 
@@ -564,7 +590,7 @@ class MainWindow:
                             # Remove backticks and format as a quote box
                             formatted_text = inline_segment[1:-1]
                             ctk.CTkLabel(
-                                line_frame, text=width_splice(formatted_text, info[1]), fg_color="#414243", corner_radius=5, font=("cascadia mono", info[1])
+                                line_frame, text=self.width_splice(formatted_text, info[1]), fg_color="#414243", corner_radius=5, font=("cascadia mono", info[1])
                             ).pack(side="left", padx=2)
                         else:
                             # there has to be a better way to do this than this much nesting...
@@ -577,26 +603,88 @@ class MainWindow:
                             link_text = ""  # this line isn't actually necessary, but it makes IntelliJ happy.
                             for i, hyperlink_segment in enumerate(hyperlink_segments):
                                 if i % 3 == 0:  # Normal text
-                                    ctk.CTkLabel(line_frame, text=width_splice(hyperlink_segment, info[1]), font=("Arial", info[1])).pack(side="left", padx=2)
+                                    ctk.CTkLabel(line_frame, text=self.width_splice(hyperlink_segment, info[1]), font=("Arial", info[1])).pack(side="left", padx=2)
 
                                 elif i % 3 == 1:  # Text with link attached
                                     link_text = hyperlink_segment
 
                                 elif i % 3 == 2:  # Link attached to text (render text)
                                     link = hyperlink_segment
-                                    hyperlink = ctk.CTkLabel(line_frame, text=width_splice(link_text, info[1]), text_color="#a4a2f2", font=("Arial", info[1]), cursor="hand2")
+                                    hyperlink = ctk.CTkLabel(line_frame, text=self.width_splice(link_text, info[1]), text_color="#a4a2f2", font=("Arial", info[1]), cursor="hand2")
                                     hyperlink.pack(side="left", padx=2)
                                     hyperlink.bind("<Button-1>", lambda _, l=link: self.open_reference(ref=l))
+                print("finished line")
 
         except Exception as e:
+            self.home_frame.grid_forget()
+
             ctk.CTkLabel(
                 self.home_frame_base, font=subtitle,
                 text=f"We weren't able to load the home page.\n\nError: {str(e)}"
-            ).pack()
-            raise e
+            ).grid(row=0, column=1)
+            # raise e
+        finally:
+            print("zooming!")
+            self.window.attributes('-fullscreen', True)
+            # self.window.state("zoomed")
+
+    @handle_exceptions
+    def width_splice(self, text, font_size, max_width=650, use_dict=False):
+        """break text after a certain number of pixels in a font"""
+        # just skip if there's not any text
+        if text.isspace():
+            return " "
+
+        hyperlink_pattern = compile(r'\[(.*?)]\((.*?)\)')
+        hyperlink_segments = hyperlink_pattern.split(text)
+        true_words = {}
+        link_text = ""
+        for i, part in enumerate(hyperlink_segments):
+            if i % 3 == 0:  # normal text
+                for word in part.split(" "):
+                    true_words[word] = word
+            elif i % 3 == 1:  # hyperlinked text
+                link_text = part.strip(" ")
+            elif i % 3 == 2:  # link
+                hyperlink = part.strip(" ")
+
+                true_words[link_text] = f"[{link_text}]({hyperlink})"
+
+        font = ImageFont.truetype("arial.ttf", font_size)
+        lines = []
+        current_line = ""
+        current_width = 0
+
+        for word, full_word in true_words.items():
+            if "\n" in word:
+                current_width = 0
+
+            word_width = font.getlength(word + " ")
+            if current_width + word_width <= max_width:
+                current_line += full_word + " "
+                current_width += word_width
+            else:
+                # lines.append(current_line.strip(" "))
+                lines.append(current_line)
+                current_line = word + " "
+                current_width = word_width
+
+        if current_line:
+            lines.append(current_line.strip(" "))
+
+        # don't break for hyperlinks
+        # for i, line in enumerate(lines):
+        #     if len(lines) > i + 2:
+        #         lines[i+1] = " ".join((line[i], lines[i+1]))
+        #         lines[i] = None
+
+        # lines = [line for line in lines if line]
+
+        return "\n".join(lines)
 
     @handle_exceptions
     def raise_home_frame(self):
+        print("try to raise")
         self.home_frame_base.tkraise()
 
     @handle_exceptions
@@ -1017,7 +1105,7 @@ class MainWindow:
         popup_id = self.popup_counter
 
         # draw
-        error_text = width_splice(str(error_text), 17)
+        error_text = self.width_splice(str(error_text), 17)
         new_width = self.workspace.winfo_width() - 2*self.popup_pos["x"]
         stretch_height = 70 + 18*error_text.count("\n")
         title_text, color = {"error": ("Something went wrong!", red), "success": ("Success!", green)}[popup_type]
@@ -1120,7 +1208,7 @@ class MainWindow:
         else:
             self.popup_msg(result)
 
-        self.list_button_select()
+        self.window.after(20, self.list_button_select)
 
     @handle_exceptions
     def checkout_continue(self, *_):
@@ -1210,9 +1298,13 @@ class MainWindow:
 
         # search header
         if self.search_mode == "part":
-            self.search_labels.configure(text="  Part Number\t\tManufacturer", anchor="w")
+            self.search_labels.configure(text="  "+list_button_format(("Part Number", "Manufacturer", "UPC", "Date Added", "Home", "Description"), "part"), anchor="w")
+            self.blank_frame.grid_forget()
+            self.thin_frame.grid(column=0, row=2, columnspan=2, sticky="NEWS", padx=27)
         else:
-            self.search_labels.configure(text="Name", anchor="center")
+            self.search_labels.configure(text="  "+list_button_format(("User ID", "Name", "Email"), "user"), anchor="w")
+            self.thin_frame.grid_forget()
+            self.blank_frame.grid(column=0, row=2, columnspan=2, sticky="NEWS", padx=27)
 
         self.search_box.configure(placeholder_text=f"Search for a {self.search_mode}")
 
@@ -1230,34 +1322,36 @@ class MainWindow:
         """update the search scrollable frame to show new results"""
         active = self.check_db_connection()
         self.clear_part_results()
+        if not active: return
 
-        if active:
-            search = self.search_box.get()
-            if self.search_mode == "part":
-                parts = self.controller.part_search(search)
-                names_dict = {part[0]: (part[1], part[2]) for part in parts}
-                parts = [part[0] for part in parts]
-            elif self.search_mode == "user":
-                names_dict = self.controller.user_search(search, use_full_names=True)
-                parts = list(names_dict.keys())
-            else:
-                raise Exception("the search mode is not set to either part or user.")
+        search = self.search_box.get()
+        if self.search_mode == "part":
+            parts = self.controller.part_search(search)
+            print("parts got:", parts)
+            names_dict = {part[0]: (part[1], part[2], part[0], part[3], part[4], part[5]) for part in parts}
+            parts = [part[0] for part in parts]
+        elif self.search_mode == "user":
+            names_dict = self.controller.user_search(search, use_full_names=True)
+            parts = list(names_dict.keys())
+        else:
+            raise Exception("the search mode is not set to either part or user.")
 
-            # add the parts into the scrolling frame
-            for index, part in enumerate(parts):
-                if part.isnumeric():
-                    button_text = names_dict[part]
-                    name_text = list_button_format(button_text) if list(part)[0] != "No matching items" else "No matching items"
-                else:
-                    name_text = str(names_dict[part])
+        # add the parts into the scrolling frame
+        for index, part in enumerate(parts):
+            if part.isnumeric():  # parts
+                button_text = names_dict[part]
+                name_text = list_button_format(button_text, self.search_mode) if list(part)[0] != "No matching items" else "No matching items"
+            else:  # users
+                # name_text = str(names_dict[part])
+                name_text = list_button_format(names_dict[part], "user")
 
-                part_widget = ctk.CTkButton(
-                    self.result_parts, text=name_text, anchor="w", fg_color="transparent",
-                    hover=not part == "No matching items", font=("Roboto Mono", 12),
-                    command=lambda i=index, p=str(part): self.list_button_select(i, p)
-                )
-                part_widget.pack(fill="x", expand=True)
-                self.part_widgets.append(part_widget)
+            part_widget = ButtonWithVar(
+                self.result_parts, var_value=part, text=name_text, fg_color="transparent",
+                hover=not part == "No matching items", font=listbutton_font, anchor="w",
+                command=lambda i=index, p=str(part): self.list_button_select(i, p)
+            )
+            part_widget.pack(fill="x", expand=True)
+            self.part_widgets.append(part_widget)
 
     @handle_exceptions
     def clear_output_box(self):
@@ -1286,8 +1380,10 @@ class MainWindow:
 
         if not button_index:
             for i, button in enumerate(self.part_widgets):
-                if _int(button.cget("text")) == _int(database_key):
+                print(_int(button.get_var()),"==",_int(database_key), _int(button.cget("text").split()[0]) == _int(database_key))
+                if _int(button.get_var()) == _int(database_key):
                     button_index = i
+                    print("got a button!")
                     break
 
         if not button_index:
@@ -1370,7 +1466,7 @@ class MainWindow:
 
         loading.pack_forget()
         self.output_box.pack(fill="both", expand=True)
-        # new_text = width_splice(new_text, 16, 400)
+        # new_text = self.width_splice(new_text, 16, 400)
 
         # finally, highlight the selected item in the scrolling frame
         button.configure(fg_color="#1f6ba5")

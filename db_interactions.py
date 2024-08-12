@@ -1176,6 +1176,7 @@ WHERE checked_out_part = {part_id}"""
 
                 # finish off the line
                 search_sql += f" as varchar)) LIKE '%{search_term.lower()}%'\n"
+        print(search_sql)
 
         self.cursor.execute(search_sql)
         search_results = self.cursor.fetchall()
@@ -1246,16 +1247,18 @@ WHERE checked_out_part = {part_id}"""
             }
 
         search_sql = f"""
-SELECT mfr_pn, mfr_name, part_upc FROM parts 
+SELECT mfr_pn, mfr_name, part_upc, part_placement, part_desc, date_added FROM parts 
 JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
 """
         results = self.search_general(search_sql, search_term, search_columns)
+        print("raw results:")
+        print(results)
         if not more_info:
             return [str(item[2]).zfill(12) for item in results]
         else:
-            if results[0] == "No matching items": results = [tuple(["No matching items" for i in range(3)])]
+            if results[0] == "No matching items": return [tuple(["No matching items" for i in range(3)])]
 
-            return [[str(row[2]).zfill(12), row[0], row[1]] for row in results]
+            return [[str(row[2]).zfill(12), row[0], row[1], row[5].strftime("%m/%d/%Y"), row[3], row[4]] for row in results]
 
     def upc_from_mfrpn(self, mfr_pn):
         """get the upc cade of a part if you have the mfr id"""
@@ -1335,10 +1338,11 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
 
         # sql to search for search term
         search_sql = f"""
-SELECT user_id, first_name, last_name FROM users
+SELECT user_id, first_name, last_name, email FROM users
 """
         results_table = self.search_general(search_sql, search_term, columns, raw_table=True)
-        results_dict = {row[0]: " ".join(row[1:]) for row in results_table}
+        print(results_table)
+        results_dict = {row[0]: (row[0], " ".join(row[1:3]), row[3]) for row in results_table}
 
         print('"'+list(results_dict.keys())[0]+'"', "==", "\" \":", list(results_dict.keys())[0] == " ")
 
