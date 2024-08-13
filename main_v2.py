@@ -11,5 +11,5 @@ app.window.mainloop()
 #  [X] error when editing a part?
 #  [X] "This name is already in use" if you don't change the name when editing.
 #  [X] we actually want a fullscreen app (hahah i knew that)
-#  [ ] can't select the first item in a list
-#  [ ] can't jump to user from part search
+#  [X] can't select the first item in a list
+#  [X] can't jump to user from part search

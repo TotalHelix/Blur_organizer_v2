@@ -82,9 +82,7 @@ def list_button_format(text, search_mode):
 
 def _int(string):
     """turns a string into an int if the string can become an int"""
-    print(f"string to _int: \"{string}\"")
     if not string or (isinstance(string, str) and string.isspace()): return
-    print("string exists and is not space")
 
     if string.isnumeric():
         return int(string)
@@ -1435,7 +1433,9 @@ class MainWindow:
         loading.pack()
 
         # make a holder for the content
+        print("part info:")
         for key, value in part_info.items():
+            print(f"\tkey: {key},\tvalue: {value}")
             # generate a frame to put the item and text side by side
             item_frame = ctk.CTkFrame(self.output_box, fg_color="transparent")
 
@@ -1464,7 +1464,8 @@ class MainWindow:
 
             # jump to reference button
             if key.lower() == "currently checked out by" and value.lower() != "not checked out":
-                self.make_link_button(item_frame, value.split("(")[0][:-1])
+                print("value set:", value.split("(")[1][:-1])
+                self.make_link_button(item_frame, value.split("(")[1][:-1])
 
             # save the item frame to a list so that we can draw everything at the same time
             self.output_frames.append(item_frame)
