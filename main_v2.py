@@ -6,7 +6,7 @@ app.window.mainloop()
 
 # TODO:
 #  [ ] Can't load image in README half the time (low priority)
-#  [ ] manage parts/ users add info box [got confirmation]
+#  [X] manage parts/ users add info box [got confirmation]
 #  [X] more spreadsheet-like search
 #  [X] error when editing a part?
 #  [X] "This name is already in use" if you don't change the name when editing.

@@ -19,6 +19,7 @@ color_green = {"fg_color": green, "hover_color": "#0f4f22"}
 title = ("Arial", 30, "bold")
 subtitle = ("Ariel", 18)
 listbutton_font = ("Roboto Mono", 12)
+manage_finder_font = ("Roboto Mono", 10)
 
 
 def make_floating_frame(master, return_frame=False, scrolling_frame=False):
@@ -508,6 +509,25 @@ class MainWindow:
         self.add_part = ctk.CTkButton(self.manage_parts_frame, text="+ Add a part", command=self.add_part, height=32)
         self.add_part.pack()
 
+        # manage parts search box
+        width = 800
+        manage_part_finder_frame = ctk.CTkFrame(self.manage_parts_frame, fg_color="transparent")
+        self.manage_finder_widgets = []
+
+        self.manage_finder_entry = ctk.CTkEntry(manage_part_finder_frame, width=width, placeholder_text="Search for anything")
+        self.manage_finder_scrollbox_key = ctk.CTkLabel(manage_part_finder_frame, width=width, fg_color="#454547", anchor="w", font=manage_finder_font)
+        self.manage_finder_scrollbox = ctk.CTkScrollableFrame(manage_part_finder_frame, width=width, height=500)
+        self.manage_finder_entry.bind("<KeyRelease>", self.manage_finder_update)
+
+        self.manage_finder_entry.pack(pady=20)
+        self.manage_finder_scrollbox_key.pack(expand=True, fill="x")
+        self.manage_finder_scrollbox.pack()
+        manage_part_finder_frame.pack(pady=50)
+
+        #####################
+        # Home / README
+        #####################
+
         a, b = make_floating_frame(self.workspace, return_frame=True, scrolling_frame=True)
         self.home_frame_base = a
         self.home_frame = b
@@ -621,6 +641,30 @@ class MainWindow:
             print("zooming!")
             self.window.attributes('-fullscreen', True)
             # self.window.state("zoomed")
+
+    @handle_exceptions
+    def manage_finder_update(self, *_):
+        search_term = self.manage_finder_entry.get()
+
+        if self.search_mode == "part":
+            self.manage_finder_scrollbox_key.configure(text="  "+list_button_format(("Part Number", "Manufacturer", "UPC", "Date Added", "Home", "Description"), "part"))
+            result = self.controller.part_search(search_term)
+        else:
+            self.manage_finder_scrollbox_key.configure(text="  "+list_button_format(("User ID", "Name", "Email"), "user"))
+            result = self.controller.user_search(search_term, use_full_names=True)
+
+        if isinstance(result, dict):
+            result = list(result.values())
+
+        for old_widget in self.manage_finder_widgets: old_widget.pack_forget()
+
+        for val in result:
+            new_label = ctk.CTkTextbox(master=self.manage_finder_scrollbox, font=manage_finder_font, height=18, fg_color="transparent")
+            new_label.pack(expand=True, fill="x")
+
+            new_label.insert("0.0", list_button_format(val, self.search_mode))
+            new_label.configure(state="disabled")
+            self.manage_finder_widgets.append(new_label)
 
     @handle_exceptions
     def width_splice(self, text, font_size, max_width=650, use_dict=False):
@@ -1272,6 +1316,9 @@ class MainWindow:
             self.print_button.pack(side="left", padx=10)
             self.manage_title.configure(text="Mange Parts")
 
+        # update the manage finder
+        self.manage_finder_update()
+
         # raise the management frame
         self.manage_parts_frame.tkraise()
 
@@ -1323,12 +1370,10 @@ class MainWindow:
         if not active: return
 
         search = self.search_box.get()
-        print('ctk search box:', self.search_box)
-        print("Search for anything:",search)
         if self.search_mode == "part":
             parts = self.controller.part_search(search)
-            names_dict = {part[0]: (part[1], part[2], part[0], part[3], part[4], part[5]) for part in parts}
-            parts = [part[0] for part in parts]
+            names_dict = {part[2]: tuple(part) for part in parts}
+            parts = [part[2] for part in parts]
         elif self.search_mode == "user":
             names_dict = self.controller.user_search(search, use_full_names=True)
             parts = list(names_dict.keys())

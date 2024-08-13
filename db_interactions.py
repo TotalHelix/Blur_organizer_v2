@@ -1257,7 +1257,8 @@ JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
         else:
             if (not results) or results[0] == "No matching items": return [[' ', ' ', "No Results", *(" " for _ in range(3))]]
 
-            return [[str(row[2]).zfill(12), row[0], row[1], row[5].strftime("%m/%d/%Y"), row[3], row[4]] for row in results]
+            unscrambled = [[str(row[2]).zfill(12), row[0], row[1], row[5].strftime("%m/%d/%Y"), row[3], row[4]] for row in results]
+            return [[u[1], u[2], u[0], u[3], u[4], u[5]] for u in unscrambled]
 
     def upc_from_mfrpn(self, mfr_pn):
         """get the upc cade of a part if you have the mfr id"""
