@@ -543,10 +543,6 @@ class MainWindow:
                     image_link = line.split("](")[1].replace(")", "")
                     alt_text = line.split("](")[0].replace("![", "")
                     try:
-                        # TODO get rid of this line i guess
-                        # raise urllib.error.URLError("this is a long error to see if text wrapping works in this new image thing I did")
-                        # get the image link
-
                         urllib.request.urlretrieve(image_link, "tmp.png")
                         my_img = Image.open("tmp.png")
                         ctk_image = ctk.CTkImage(light_image=my_img, dark_image=my_img, size=(my_img.width, my_img.height))
@@ -917,6 +913,7 @@ class MainWindow:
         self.form_mode_add = False  # set the form to edit mode and not add mode
 
         if self.search_mode == "part":
+            print("key sent to database:", self.selected_part_key)
             data = self.controller.part_data(self.selected_part_key)
             self.new_part_form.tkraise()
             for name, entry in self.add_part_entries.items():
@@ -928,7 +925,7 @@ class MainWindow:
             self.new_user_form.tkraise()
             for name, entry in self.add_user_entries.items():
                 entry.delete(0, "end")
-                print(str(data))
+                print("search:",str(data))
                 entry.insert(0, data[name])
 
     @handle_exceptions
@@ -948,7 +945,6 @@ class MainWindow:
                 return "-QUIT-"
         else:
             results = self.controller.user_search(id_upc, columns={"user_id": True})
-            print("\t\t\t\tFIRED!", results)
             found = False
 
             for line in results:
@@ -1022,6 +1018,7 @@ class MainWindow:
 
         # new part mode
         if self.form_mode_add:
+            print("trying to add a part")
             try:
                 if self.search_mode == "part":
                     result = self.controller.add_part(fields[3], *fields[:3], *fields[4:])
@@ -1046,6 +1043,7 @@ class MainWindow:
 
         # edit part mode
         else:
+            print("trying to edit a part")
             if self.search_mode == "part":
                 selected_part_upc = self.get_user_input()
 
@@ -1288,7 +1286,7 @@ class MainWindow:
 
         # try again to connect to the database
         if (not self.controller) or self.controller.cursor_exists():
-            self.db_connect()
+            pass  # self.db_connect()
 
         # this should never be fired
         if search_type not in ["user", "part"]: raise Exception("Invalid search type: Must be either 'user' or 'part'. This is most likely a backend issue.")
@@ -1390,10 +1388,10 @@ class MainWindow:
             for i, button in enumerate(self.part_widgets):
                 if _int(button.get_var()) == _int(database_key):
                     button_index = i
-                    print("got a button!")
+                    print(f"got a button!\tnew button index: \"{button_index}\", i: \"{i}\"")
                     break
 
-        if not button_index:
+        if (not button_index) and button_index != 0:
             print("no button index")
             return
 

@@ -441,7 +441,7 @@ class Organizer:
         if email_results: return "-EMAIL_ALREADY_TAKEN-"
 
         # block existing names
-        name_matches = f"SELECT user_id FROM users WHERE last_name = '{lname}' AND first_name = '{fname}'"
+        name_matches = f"SELECT user_id FROM users WHERE last_name = '{lname}' AND first_name = '{fname}' AND NOT user_id = '{old_id}'"
         self.cursor.execute(name_matches)
         # matching_names = [row for row in self.cursor.fetchall() if row[0] != fname]
         if self.cursor.fetchall(): return "-NAME_ALREADY_TAKEN-"
