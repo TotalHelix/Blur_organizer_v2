@@ -82,7 +82,9 @@ def list_button_format(text, search_mode):
 
 def _int(string):
     """turns a string into an int if the string can become an int"""
-    if not string: return
+    print(f"string to _int: \"{string}\"")
+    if not string or (isinstance(string, str) and string.isspace()): return
+    print("string exists and is not space")
 
     if string.isnumeric():
         return int(string)
@@ -530,7 +532,6 @@ class MainWindow:
                 print(f"finished requests. text: {document}")
 
             for line in document:
-                print("writing line", line)
                 line = line.replace("\n", " ")
 
                 # skip blank lines
@@ -613,7 +614,6 @@ class MainWindow:
                                     hyperlink = ctk.CTkLabel(line_frame, text=self.width_splice(link_text, info[1]), text_color="#a4a2f2", font=("Arial", info[1]), cursor="hand2")
                                     hyperlink.pack(side="left", padx=2)
                                     hyperlink.bind("<Button-1>", lambda _, l=link: self.open_reference(ref=l))
-                print("finished line")
 
         except Exception as e:
             self.home_frame.grid_forget()
@@ -1306,7 +1306,9 @@ class MainWindow:
             self.thin_frame.grid_forget()
             self.blank_frame.grid(column=0, row=2, columnspan=2, sticky="NEWS", padx=27)
 
-        self.search_box.configure(placeholder_text=f"Search for a {self.search_mode}")
+        print("search box before config:", self.search_box.get())
+        # self.search_box.configure(placeholder_text=f"Search for a {self.search_mode}")
+        print("search box after config:", self.search_box.get())
 
         # clear leftover data
         self.search_box.delete("0", "end")
@@ -1325,9 +1327,10 @@ class MainWindow:
         if not active: return
 
         search = self.search_box.get()
+        print('ctk search box:', self.search_box)
+        print("Search for anything:",search)
         if self.search_mode == "part":
             parts = self.controller.part_search(search)
-            print("parts got:", parts)
             names_dict = {part[0]: (part[1], part[2], part[0], part[3], part[4], part[5]) for part in parts}
             parts = [part[0] for part in parts]
         elif self.search_mode == "user":
@@ -1344,6 +1347,8 @@ class MainWindow:
             else:  # users
                 # name_text = str(names_dict[part])
                 name_text = list_button_format(names_dict[part], "user")
+
+            name_text = name_text.strip(" ")
 
             part_widget = ButtonWithVar(
                 self.result_parts, var_value=part, text=name_text, fg_color="transparent",
@@ -1374,13 +1379,15 @@ class MainWindow:
     @handle_exceptions
     def list_button_select(self, button_index=None, database_key=None):
         """select the targeted part and update the results accordingly"""
-        print("got a select promgpt")
+        print("got a select promgpt:")
+        print("\tbutton index:", button_index)
+        print("\tdatabase key:", database_key)
         if not database_key:
             database_key = self.selected_part_key
+            print(f"new db key: \"{self.selected_part_key}\"")
 
         if not button_index:
             for i, button in enumerate(self.part_widgets):
-                print(_int(button.get_var()),"==",_int(database_key), _int(button.cget("text").split()[0]) == _int(database_key))
                 if _int(button.get_var()) == _int(database_key):
                     button_index = i
                     print("got a button!")
@@ -1388,7 +1395,7 @@ class MainWindow:
 
         if not button_index:
             print("no button index")
-            # return
+            return
 
         try:
             print("button info:")
@@ -1405,6 +1412,7 @@ class MainWindow:
 
         # un-highlight the old selection
         if self.selected_part:
+            print("setting transparency")
             self.selected_part.configure(fg_color="transparent")
 
         # get the info for the selected part

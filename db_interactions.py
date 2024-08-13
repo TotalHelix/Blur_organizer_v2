@@ -24,7 +24,7 @@ from names import get_first_name, get_last_name
 
 def find_common_elements(list_to_compare):
     if not list_to_compare or list_to_compare == [[['No matching items', 'No matching items']]]:
-        return [(" ", " ", " ")]
+        return None
 
     # Start with the first list's elements as the base set
     common_elements = set(list_to_compare[0])
@@ -219,14 +219,18 @@ class Organizer:
         search_sql = f"SELECT user_id FROM users WHERE first_name = '{first_name}' AND last_name = '{last_name}'"
 
         self.cursor.execute(search_sql)
-        return self.cursor.fetchall()[0][0]
+        result = self.cursor.fetchall()
+        print("user_id result:", result)
+        if result and result[0]:
+            return result[0][0]
+        else:
+            return ["No matching items"]
 
     def name_from_user_id(self, user_id):
         search_sql = f"SELECT first_name, last_name FROM users WHERE user_id = '{user_id}'"
         self.cursor.execute(search_sql)
         results = self.cursor.fetchall()
 
-        print("RESULTS FOR NAME:", results)
         return results[0] if results else None
 
     def upc_exists(self, upc):
@@ -719,7 +723,6 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr}"""
         parts_out = self.cursor.fetchall()
 
         for part in parts_out:
-            print(part[0])
             self.part_checkin(part[0])
 
         self.conn.commit()
@@ -738,7 +741,6 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
     def delete_generic(self, key, keyword):
         """delete the selected item on the list"""
         self.refresh_cursor()  # still don't know if this was actually the fix
-        print("key, keyword:", key, keyword)
 
         # get the table from the keyword
         location = {
@@ -878,8 +880,6 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}""
         """check a part back in"""
         # what to put at the end of the popup
         pos_message = " Please return part to "
-
-        print(upc)
 
         # also get the part location and add it to the message
         search_sql = f"SELECT part_placement FROM parts WHERE part_upc = {upc}"
@@ -1161,6 +1161,7 @@ WHERE checked_out_part = {part_id}"""
 
         # I didn't event think of scanning into the search box, but this will let you do it now ig
         if search_term.isnumeric(): search_term = str(int(search_term))
+        print("search_term:", search_term)
 
         # remove white space
         search_term = search_term.replace("'", "''")
@@ -1176,7 +1177,6 @@ WHERE checked_out_part = {part_id}"""
 
                 # finish off the line
                 search_sql += f" as varchar)) LIKE '%{search_term.lower()}%'\n"
-        print(search_sql)
 
         self.cursor.execute(search_sql)
         search_results = self.cursor.fetchall()
@@ -1235,6 +1235,7 @@ WHERE checked_out_part = {part_id}"""
     def part_search(self, search_term, search_columns=None, more_info=True):
         """get the matching upc codes to a search term"""
         # sql to search for search term
+        print("search term when called:", search_term)
 
         if search_columns is None:
             search_columns = {
@@ -1251,12 +1252,10 @@ SELECT mfr_pn, mfr_name, part_upc, part_placement, part_desc, date_added FROM pa
 JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
 """
         results = self.search_general(search_sql, search_term, search_columns)
-        print("raw results:")
-        print(results)
         if not more_info:
             return [str(item[2]).zfill(12) for item in results]
         else:
-            if results[0] == "No matching items": return [tuple(["No matching items" for i in range(3)])]
+            if (not results) or results[0] == "No matching items": return [[' ', ' ', "No Results", *(" " for _ in range(3))]]
 
             return [[str(row[2]).zfill(12), row[0], row[1], row[5].strftime("%m/%d/%Y"), row[3], row[4]] for row in results]
 
@@ -1341,13 +1340,13 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
 SELECT user_id, first_name, last_name, email FROM users
 """
         results_table = self.search_general(search_sql, search_term, columns, raw_table=True)
-        print(results_table)
+
+        if (not results_table) or (not results_table[0]):
+            return {"No Results": ("No Results", *(" " for _ in range(3)))}
+
         results_dict = {row[0]: (row[0], " ".join(row[1:3]), row[3]) for row in results_table}
 
-        print('"'+list(results_dict.keys())[0]+'"', "==", "\" \":", list(results_dict.keys())[0] == " ")
-
         if list(results_dict.keys())[0] == " ":
-            print("in the if", list(results_dict.keys()))
             return {"No matching items": "No matching items"}
         elif use_full_names: return results_dict
         else: return list(results_dict.keys())
