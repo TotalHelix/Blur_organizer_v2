@@ -20,11 +20,13 @@ prompted for a password
 5. In the Blur Organizer under the `Danger Zone` tab, select `Format Database` to
 set up the database
 
+### Checking out parts
+
+Under the `Part Search` tab, select the part that you want to check out or return, and the click on the `Check Out` or `Return` buttons at the bottom.
+
 ### Adding a part or user
 
-To add a part, go to the `Part Search` tab, and click on the `+ Add` button below the     
-search box. Fill out the form according to the part that you want to add, and then click
-`Submit`.
+To add a part or user, go to the appropriate `Manage Parts` or `Manage Users` tab, and click on the `+ Add` button below the search box. Fill out the form according to the part/user that you want to add, and then click `Submit`.
 
 ### Finding a part or user
 

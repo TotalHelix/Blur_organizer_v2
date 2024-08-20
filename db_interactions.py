@@ -836,7 +836,7 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
         safe_placement = placement.replace("'", "''")
 
         # make sure the webpage starts with https
-        if url == "": url = None
+        if "." not in url: url = None
         elif not url.startswith("https://"): url = "https://"+url
 
         date_added = datetime.today().strftime("%Y-%m-%d %H:%M:")
@@ -905,7 +905,7 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}""
                 self.conn.commit()
                 return "Successfully checked in." + pos_message
             else:
-                return "The scanned part was never checked out." + pos_message + "or check out instead."
+                return "The scanned part was never checked out." + pos_message + " or check out instead."
 
         else:
             # if the part can't be found in the parts table
@@ -1256,9 +1256,19 @@ JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
             return [str(item[2]).zfill(12) for item in results]
         else:
             if (not results) or results[0] == "No matching items": return [[' ', ' ', "No Results", *(" " for _ in range(3))]]
-
             unscrambled = [[str(row[2]).zfill(12), row[0], row[1], row[5].strftime("%m/%d/%Y"), row[3], row[4]] for row in results]
-            return [[u[1], u[2], u[0], u[3], u[4], u[5]] for u in unscrambled]
+            why_another_stage = []
+
+            for row in unscrambled:
+                self.cursor.execute(f"SELECT first_name, last_name FROM part_locations JOIN users ON part_locations.current_holder = users.user_id WHERE checked_out_part = {row[0]}")
+                result = self.cursor.fetchall()
+                if result: result = " ".join(result[0])
+                print("search result:", result)
+                # why_another_stage.append([*row, "✖" if result else "✔"])  # looks better but there's a stray pixel on the check ):
+                # why_another_stage.append([*row, chr(0x00A0) if result else "✓"])
+                why_another_stage.append([*row, f"Out ({result})" if result else "Available"])
+
+            return [[u[1], u[2], u[0], u[3], u[4], u[5], u[6]] for u in why_another_stage]
 
     def upc_from_mfrpn(self, mfr_pn):
         """get the upc cade of a part if you have the mfr id"""
@@ -1271,6 +1281,10 @@ JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
 
     def part_data(self, target_upc, raw=False):
         """get the part information for a upc code"""
+
+        if not target_upc or (isinstance(target_upc, str) and not target_upc.isnumeric()):
+            return {"Invalid Search": ""}
+
         # sql to search for search term
         search_sql = f"""
 SELECT part_upc, part_placement, mfr_name, mfr_pn, part_desc, url, date_added FROM parts 
@@ -1307,6 +1321,7 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
         mfr_pn = search_results[3]
         mfr_pn = mfr_pn if mfr_pn else "Unknown"
 
+        print("search_results??", search_results)
         # change the table into a dictionary
         formatted_results = {
             "UPC code": str(search_results[0]).zfill(12),
@@ -1345,7 +1360,12 @@ SELECT user_id, first_name, last_name, email FROM users
         if (not results_table) or (not results_table[0]):
             return {"No Results": ("No Results", *(" " for _ in range(3)))}
 
-        results_dict = {row[0]: (row[0], " ".join(row[1:3]), row[3]) for row in results_table}
+        print(results_table[0])
+        print(len(results_table[0]))
+        if len(results_table[0]) > 2:
+            results_dict = {row[0]: (row[0], " ".join(row[1:3]), row[3]) for row in results_table}
+        else:
+            results_dict = {"No Results": ("No Results", *(" " for _ in range(3)))}
 
         if list(results_dict.keys())[0] == " ":
             return {"No matching items": "No matching items"}
