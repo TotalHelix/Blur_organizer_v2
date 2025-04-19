@@ -1,6 +1,13 @@
 # Blur part organizer
 
-to begin, select one of the sections on the left side of the window.
+This program is intended to help organize parts, calibrated equipment,
+etc. by utilizing a PostgreSQL database. This program should be set up
+on a dedicated kiosk machine near the parts intended to be organized.
+
+If you're reading this in the program, to begin, select one of the sections on the left side of the window.
+
+If you're reading this from GitHub, this README file is displayed on the program's home 
+screen.
 
 ### Initial setup
 
@@ -12,13 +19,16 @@ use the email blur.zebra@gmail.com and the password #Blur2018!!!
 
 3. Run the PostgreSQL setup, unchecking the box for Stack Builder
 
-![Uncheck Stack Builder](https://i.ibb.co/VvpzbCF/stackbuilder.png)
+![Uncheck Stack Builder](https://raw.githubusercontent.com/TotalHelix/Blur_organizer_v2/refs/heads/main/images/Uncheck%20Stack%20Builder.png)
 
 4. Continue through the installer accepting all defaults, entering `blur4321` when 
 prompted for a password
 
 5. In the Blur Organizer under the `Danger Zone` tab, select `Format Database` to
 set up the database
+
+## Example Program Use
+![Screenshot of program filled with sample data](https://raw.githubusercontent.com/TotalHelix/Blur_organizer_v2/refs/heads/main/images/Example%20Program%20Use.png)
 
 ### Checking out parts
 

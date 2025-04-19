@@ -19,8 +19,8 @@ color_red = {"fg_color": red, "hover_color": "#781610"}
 color_green = {"fg_color": green, "hover_color": "#0f4f22"}
 title = ("Arial", 30, "bold")
 subtitle = ("Ariel", 18)
-listbutton_font = ("Roboto Mono", 12)
-manage_finder_font = ("Roboto Mono", 10)
+listbutton_font = ("DejaVu Sans Mono", 12)
+manage_finder_font = ("DejaVu Sans Mono", 10)
 
 
 def make_floating_frame(master, return_frame=False, scrolling_frame=False):

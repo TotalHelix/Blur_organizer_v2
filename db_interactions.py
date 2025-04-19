@@ -1,7 +1,6 @@
 # label printing
 import os
 import random
-
 import pywintypes
 from barcode.writer import ImageWriter
 from barcode import UPCA
