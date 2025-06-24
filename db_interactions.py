@@ -186,8 +186,15 @@ def strip_string(string_text):
 
 
 class Organizer:
-    def __init__(self, user="customer", password="blur4321"):
+    def __init__(self, user="", password="blur4321", dbname="parts_organizer_db"):
         """connect to a database and return the connection"""
+
+        # I should have done this earlier
+        self.db_name = dbname
+
+        # default user
+        if user == "":
+            user = f"customer_{dbname}"
 
         # if the user is trying to set up the database, connect to the postgres database
         if user == "postgres":
@@ -196,7 +203,7 @@ class Organizer:
             )
         else:
             self.conn = connect(
-                f"dbname=parts_organizer_db user={user} password={password}"
+                f"dbname={dbname} user={user} password={password}"
             )
 
         self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
@@ -204,7 +211,10 @@ class Organizer:
         # set up the connection and cursor, this is how we talk to the database
         self.cursor = self.conn.cursor()
 
-    def __enter__(self, user="customer"):
+    def __enter__(self, user=""):
+        # I don't remember what the point of this was...
+        # better keep it just in case
+        if user == "": user = f"customer_{self.db_name}"
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -237,7 +247,7 @@ class Organizer:
         self.cursor.execute(f"SELECT * FROM parts WHERE part_upc = {upc}")
         return self.cursor.fetchall()
 
-    def format_database(self):
+    def format_database(self, db_name):
         """set up all the tables of the database"""
 
         # find out if the database already exists and needs to be dropped
@@ -246,28 +256,28 @@ class Organizer:
         self.cursor.execute(get_db_list)
 
         # if the database does already exist
-        if "parts_organizer_db" in [name[0] for name in self.cursor.fetchall()]:
+        if db_name in [name[0] for name in self.cursor.fetchall()]:
             print("there was a database in there")
 
             # disconnect from db
-            terminate_conn = """
+            terminate_conn = f"""
             SELECT pg_terminate_backend(pid) 
             FROM pg_stat_activity 
             WHERE 
                 pid <> pg_backend_pid()
-                AND datname = 'parts_organizer_db';
+                AND datname = '{db_name}';
             """
             self.cursor.execute(terminate_conn)
             self.refresh_cursor()
 
             # drop database
-            drop_db = "DROP DATABASE parts_organizer_db;"
+            drop_db = f"DROP DATABASE {db_name};"
             self.cursor.execute(drop_db)
 
             self.conn.commit()
 
         # create a new database
-        new_db_sql = "CREATE DATABASE parts_organizer_db;"
+        new_db_sql = f"CREATE DATABASE {db_name};"
         self.cursor.execute(new_db_sql)
 
         # first thing before switching to the new db, drop anything from the customer role in postgres
@@ -280,7 +290,7 @@ class Organizer:
         self.conn.close()
 
         # start a new connection
-        self.conn = connect("dbname=parts_organizer_db user=postgres password=blur4321")
+        self.conn = connect(f"dbname={db_name} user=postgres password=blur4321")
         self.cursor = self.conn.cursor()
 
         self.refresh_cursor()
@@ -329,9 +339,9 @@ class Organizer:
             # drop any old tables that might exist with the old name
 
             create_command = f"""
-    DROP TABLE IF EXISTS public.{table} CASCADE;
-    CREATE TABLE public.{table} 
-    (\n"""
+DROP TABLE IF EXISTS public.{table} CASCADE;
+CREATE TABLE public.{table} 
+(\n"""
 
             # go through every column and add it to the create command
             for column in tables_setup.get(table):  # for every column in the table
@@ -374,11 +384,13 @@ class Organizer:
             # chop off the last comma and close the command
             create_command = create_command[:-2] + "\n);"
 
+            print(create_command)
+
             self.cursor.execute(create_command)
             self.conn.commit()
 
             # remake the customer
-            self.new_user()
+            self.new_user(db_name)
             self.conn.commit()
 
             # recreate the
@@ -487,17 +499,17 @@ class Organizer:
         """drop all dependencies on the customer role"""
 
         # see if the customer role exists
-        self.cursor.execute("SELECT pg_roles.rolname FROM pg_roles WHERE pg_roles.rolname = 'customer'")
+        self.cursor.execute(f"SELECT pg_roles.rolname FROM pg_roles WHERE pg_roles.rolname = 'customer_{self.db_name}'")
 
         # if it does:
         if self.cursor.fetchall():
-            disconnect_role = """
-            REASSIGN OWNED BY customer TO postgres;
-            DROP OWNED BY customer;"""
+            disconnect_role = f"""
+            REASSIGN OWNED BY customer_{self.db_name} TO postgres;
+            DROP OWNED BY customer_{self.db_name};"""
             self.cursor.execute(disconnect_role)
             self.refresh_cursor()
 
-    def new_user(self):
+    def new_user(self, db_name):
         """dumb function that creates a user because it gets mad when it's in the other one"""
         # first off, get rid of role dependencies of they exist
         self.disconnect_customer()
@@ -506,24 +518,24 @@ class Organizer:
         self.cursor.close()
         self.conn.commit()
         self.conn.close()
-        self.conn = connect("user=postgres password=blur4321 dbname=parts_organizer_db")
+        self.conn = connect(f"user=postgres password=blur4321 dbname={db_name}")
         self.cursor = self.conn.cursor()
 
-        user_create = """
-        DROP ROLE IF EXISTS customer;
-        CREATE ROLE customer  WITH
+        user_create = f"""
+        DROP ROLE IF EXISTS customer_{db_name};
+        CREATE ROLE customer_{db_name}  WITH
             LOGIN
             NOINHERIT
             PASSWORD 'blur4321';
         
-        GRANT CONNECT ON DATABASE parts_organizer_db TO customer;
-        GRANT SELECT ON ALL TABLES IN SCHEMA public TO customer;
-        GRANT INSERT ON ALL TABLES IN SCHEMA public TO customer;
-        GRANT DELETE ON ALL TABLES IN SCHEMA public TO customer;
-        GRANT UPDATE ON ALL TABLES IN SCHEMA public TO customer;
-        GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO customer;
+        GRANT CONNECT ON DATABASE {db_name} TO customer_{db_name};
+        GRANT SELECT ON ALL TABLES IN SCHEMA public TO customer_{db_name};
+        GRANT INSERT ON ALL TABLES IN SCHEMA public TO customer_{db_name};
+        GRANT DELETE ON ALL TABLES IN SCHEMA public TO customer_{db_name};
+        GRANT UPDATE ON ALL TABLES IN SCHEMA public TO customer_{db_name};
+        GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO customer_{db_name};
         
-        GRANT CONNECT ON DATABASE parts_organizer_db TO postgres;
+        GRANT CONNECT ON DATABASE {db_name} TO postgres;
         GRANT SELECT ON ALL TABLES IN SCHEMA public TO postgres;
         GRANT INSERT ON ALL TABLES IN SCHEMA public TO postgres;
         GRANT DELETE ON ALL TABLES IN SCHEMA public TO postgres;
@@ -556,7 +568,7 @@ class Organizer:
 
         self.cursor = self.conn.cursor()
 
-    def populate_db(self):
+    def populate_db(self, db_name):
         """fill the desired table with sample data"""
 
         # get the current tables
@@ -568,7 +580,7 @@ class Organizer:
         self.cursor.close()
         self.conn.commit()
         self.conn.close()
-        self.conn = connect("dbname=parts_organizer_db user=customer password=blur4321")
+        self.conn = connect(f"dbname={db_name} user=customer_{db_name} password=blur4321")
         self.cursor = self.conn.cursor()
 
         # ----- fill out all the databases
@@ -1501,11 +1513,11 @@ WHERE mfr_name = '{target_name}'"""
 
         return formatted_results
 
-    def customer_exists(self):
-        user_check_sql = "SELECT 1 FROM pg_roles WHERE rolname='customer'"
+    def customer_exists(self, db_name):
+        user_check_sql = f"SELECT 1 FROM pg_roles WHERE rolname='customer_{db_name}'"
         self.cursor.execute(user_check_sql)
 
-        return "customer" in self.cursor.fetchall()
+        return f"customer_{db_name}" in self.cursor.fetchall()
 
     def cursor_exists(self):
         return self.cursor

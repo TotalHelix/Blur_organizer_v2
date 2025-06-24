@@ -3,13 +3,14 @@ from os import remove as os_remove
 import tkinter as tk
 import urllib
 import customtkinter as ctk
-import mouse
+from sys import exit
 import requests
 from PIL import ImageFont, Image
 from db_interactions import Organizer
 import psycopg2.errors as p2er
 from re import compile, split as re_split
 from webbrowser import open as web_open
+from time import sleep
 
 # theme stuff; colors and fonts
 ctk.set_appearance_mode("dark")
@@ -19,8 +20,10 @@ color_red = {"fg_color": red, "hover_color": "#781610"}
 color_green = {"fg_color": green, "hover_color": "#0f4f22"}
 title = ("Arial", 30, "bold")
 subtitle = ("Ariel", 18)
-listbutton_font = ("DejaVu Sans Mono", 12)
-manage_finder_font = ("DejaVu Sans Mono", 10)
+listbutton_font = ("Roboto Mono", 12)
+manage_finder_font = ("Roboto Mono", 10)
+button_enable = {"state": "normal", "fg_color": "#206ca4"}
+button_disable = {"state": "disabled", "fg_color": "#506474"}
 
 
 def make_floating_frame(master, return_frame=False, scrolling_frame=False):
@@ -168,14 +171,21 @@ def handle_exceptions(func):
         except Exception as er:
 
             args[0].popup_msg(str(er))
-            raise er
+            print("we were here...")
+            print(er)
+            raise er  # TODO: comment this out again when you deploy (it will crash the program)
     return wrapper
 
 
 class ButtonWithVar(ctk.CTkButton):
     def __init__(self, master, var_value, **kwargs):
         self.button = super().__init__(master, **kwargs)
+        print("master:", str(master))
+        print("**kwargs:", str(kwargs))
+        print("self.button:", str(self.button))
+        print("var_value:", str(var_value))
         self.var = tk.StringVar(self.button, value=var_value)
+        print("self.var:", str(self.var))
 
     def get_var(self):
         return self.var.get()
@@ -183,10 +193,10 @@ class ButtonWithVar(ctk.CTkButton):
 
 class MainWindow:
     """The whole window that does all of everything"""
-    def __init__(self):
-        # splash screen
-        # self.splash = tk.Tk()
-        # self.splash.update()
+    def __init__(self, db_name):
+
+        # database credentials
+        self.db_name = db_name
 
         # initial setup
         self.window = ctk.CTk()
@@ -203,6 +213,7 @@ class MainWindow:
         self.checkout_upc = ""
         self.output_frames = []
         self.prompt_response = None
+        self.is_fullscreen = True
 
         # for interactions with the database
         self.controller = None
@@ -216,7 +227,7 @@ class MainWindow:
         side_buttons = {
             # these have to be lambda again because the frames haven't been defined yet.
             "Home": self.raise_home_frame,
-            "Part Search": lambda: self.raise_search("part"),
+            "Part Checkout": lambda: self.raise_search("part"),
             "User Search": lambda: self.raise_search("user"),
             "Manage Parts": lambda: self.raise_manage("part"),
             "Manage Users": lambda: self.raise_manage("user")
@@ -234,12 +245,10 @@ class MainWindow:
 
         menu_button = {"fg_color": "transparent", "height": 30, "width": 40, "font": ("Arial", 15), "anchor": "n"}  # , "hover": False}
         menu_pack = {"side": "right", "padx": 5, "pady": 5}
-        fullscreen = lambda: self.window.attributes('-fullscreen', True)
-        minimize = lambda: self.window.wm_state("iconic")
 
-        ctk.CTkButton(self.menu_bar, text="χ", command=quit, hover_color="red", **menu_button).pack(**menu_pack)
-        ctk.CTkButton(self.menu_bar, text="🗖", command=fullscreen, hover_color="#4a4a4a", **menu_button).pack(**menu_pack)
-        ctk.CTkButton(self.menu_bar, text="🗕", command=minimize, hover_color="#4a4a4a", **menu_button).pack(**menu_pack)
+        ctk.CTkButton(self.menu_bar, text="🗙", command=lambda: exit(0), hover_color="red", **menu_button).pack(**menu_pack)
+        ctk.CTkButton(self.menu_bar, text="🗖", command=self.fullscreen, hover_color="#4a4a4a", **menu_button).pack(**menu_pack)
+        ctk.CTkButton(self.menu_bar, text="🗕", command=self.minimize, hover_color="#4a4a4a", **menu_button).pack(**menu_pack)
 
         # workspace
         self.workspace = ctk.CTkFrame(self.window)
@@ -352,7 +361,7 @@ class MainWindow:
 
         # dropdown of users to pick from
         self.checkout_selected_user = tk.StringVar(value=" ")
-        self.checkout_user_dropdown = ctk.CTkOptionMenu(long_frame, values=[" "], variable=self.checkout_selected_user)
+        self.checkout_user_dropdown = ctk.CTkOptionMenu(long_frame, values=[" "], variable=self.checkout_selected_user, command=self.fill_dropdown)
         self.checkout_user_dropdown.pack(side="left")
 
         ctk.CTkLabel(self.checkout_user_frame, text="If you don't see your account, you can create a new one under the Manage Users tab.").pack()
@@ -379,8 +388,8 @@ class MainWindow:
         margin(danger_zone_middle)
 
         data = [  # Title, Description, Button text, command
-            ("Format Database", "resets the database with all default tables", "Format", self.format_database),
-            ("Populate Database", "fills the database up with random data. Useful for testing", "Populate", self.populate_database)
+            ("Format Database", "Resets the database with all default tables", "Format", self.format_database),
+            ("Populate Database", "Fills the database up with random data. Useful for testing", "Populate", self.populate_database)
         ]
 
         for args in data:
@@ -401,11 +410,16 @@ class MainWindow:
         self.top_frame = ctk.CTkFrame(self.find_part, fg_color="transparent")
         self.top_frame.grid(row=0, column=0, sticky="nsew", padx=40)
 
-        self.search_box = ctk.CTkEntry(self.top_frame, placeholder_text="Search for a part", width=300)
-        self.search_box.pack(pady=20, side="top")
+        inner_frame = ctk.CTkFrame(self.top_frame, fg_color="transparent")
+        inner_frame.pack(side="top")
+
+        ctk.CTkLabel(inner_frame, fg_color="transparent", text="Search:").pack(side="left", padx=10)
+
+        self.search_box = ctk.CTkEntry(inner_frame, placeholder_text="Search for a part", width=600)
+        self.search_box.pack(pady=20, side="left")
         self.search_box.bind("<KeyRelease>", self.update_search)
 
-        self.search_labels = ctk.CTkLabel(self.top_frame, text="filler text, edit in the raise_search function", fg_color="#454547", font=listbutton_font)
+        self.search_labels = ctk.CTkLabel(self.top_frame, fg_color="#454547", font=listbutton_font)
         self.search_labels.pack(side="top", fill="x", expand=True)
 
         self.result_parts = ctk.CTkScrollableFrame(self.find_part, width=800)
@@ -417,8 +431,13 @@ class MainWindow:
         self.thin_frame = ctk.CTkFrame(self.find_part, fg_color="transparent")  # , height=25)   # add this back if you want a blank margin with no buttons
         self.blank_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", height=20)
 
+        self.check_in_out_frame = ctk.CTkFrame(inner_frame, fg_color="transparent")
+
+        self.check_in_out_buttons = []
         for name, cmd in [("🛒 Check Out", self.checkout_continue), ("⟳ Return", self.checkin_continue)]:
-            ctk.CTkButton(self.thin_frame, text=name, width=500, height=50, command=cmd).pack(side="left", padx=15, pady=20)
+            new_button = ctk.CTkButton(self.check_in_out_frame, text=name, command=cmd, **button_disable)
+            self.check_in_out_buttons.append(new_button)
+            new_button.pack(side="left", padx=15, pady=20)
 
         # right side (display part info)
         part_info_display_frame = ctk.CTkFrame(self.find_part, fg_color="transparent", width=350)
@@ -428,6 +447,8 @@ class MainWindow:
         self.part_generic_info.pack(padx=0, pady=20, anchor="n", expand=True, fill="x")
         self.output_box = ctk.CTkFrame(self.part_generic_info, fg_color="transparent")
         self.output_box.pack(fill="both", expand=True)
+
+        self.blank_frame.grid(column=0, row=2, columnspan=2, sticky="NEWS", padx=27)
 
         #######################
         # add new part form
@@ -510,11 +531,11 @@ class MainWindow:
         manage_finder_thin_frame.pack(fill="x", expand="true")
         self.manage_finder_entry.pack(pady=20, side="left", fill="x", expand="true")
         self.manage_finder_scrollbox_key.pack(expand=True, fill="x")
-        self.manage_finder_scrollbox.pack()
+        self.manage_finder_scrollbox.pack(expand=True, fill="x")
         manage_part_finder_frame.pack(pady=10)
 
         # search box
-        self.manage_search_box = ctk.CTkLabel(self.manage_parts_frame, height=28, width=500, font=subtitle, fg_color="#48484a")
+        self.manage_search_box = ctk.CTkLabel(self.manage_parts_frame, height=28, width=500, font=subtitle, fg_color="#484848")
 
         self.manage_search_box.pack(pady=20)
 
@@ -649,15 +670,25 @@ class MainWindow:
                 self.home_frame_base, font=subtitle,
                 text=f"We weren't able to load the home page.\n\nError: {str(e)}"
             ).grid(row=0, column=1)
-            # raise e
+            # raise e  # TODONE comment this out again
         finally:
             print("zooming!")
             self.window.attributes('-fullscreen', True)
             # self.window.state("zoomed")
 
+    def fullscreen(self):
+        self.is_fullscreen = not self.is_fullscreen
+        self.window.attributes('-fullscreen', self.is_fullscreen)
+
+    def minimize(self): self.window.wm_state("iconic")
+
     @handle_exceptions
     def manage_finder_update(self, *_):
+        """Updates the search results for the search panel in the manage parts frame. Works the same as update_search"""
         search_term = self.manage_finder_entry.get()
+
+        # scroll back to the top
+        self.manage_finder_scrollbox.parent_canvas.yview_moveto(0)
 
         if self.search_mode == "part":
             self.manage_finder_scrollbox_key.configure(text="  "+list_button_format(("Part Number", "Manufacturer", "UPC", "Date Added", "Home", "Description", "Status"), "part"))
@@ -678,17 +709,18 @@ class MainWindow:
             self.manage_finder_widgets.append(new_label)
 
             if not val or len(val) == 6:
-                new_label.configure(text=" No Results (new)")
+                new_label.configure(text=" No Results")
                 continue
 
-            print("val:", val, "len(val):", len(val))
+            print("val:", val, "\n\tlen(val):", len(val), "\n\tval[0]:", val[0])
             widget_text = " "+list_button_format(val, self.search_mode).strip(" ")
 
-            id_parts = widget_text.split()
-            if len(id_parts) >= 3:
-                identifier = id_parts[3 if self.search_mode == "part" else 0]
+            if len(val) == 3:
+                identifier = val[0]
+            elif len(val) > 3:
+                identifier = val[2]
             else:
-                identifier = ""
+                identifier = "No Part Selected"
 
             # new_label = ctk.CTkTextbox(master=self.manage_finder_scrollbox, font=manage_finder_font, height=18, fg_color="transparent")
             new_label.configure(text=widget_text)
@@ -698,6 +730,17 @@ class MainWindow:
             new_label.bind("<Button-1>", lambda event=_, u=identifier: self.manage_finder_select(event, upc=u))
 
     @handle_exceptions
+    def fill_dropdown(self, *_):
+        """when the user selects their account when checking out a part, go ahead and fill that information into the
+        search box to avoid confusion"""
+
+        user = self.checkout_user_dropdown.get()
+        print("dropdown user:", user)
+
+        self.checkout_user_search.delete(0, "end")
+        self.checkout_user_search.insert(0, user)
+
+    @handle_exceptions
     def raise_and_select(self):
         self.raise_search(self.search_mode)
         self.window.after(20, self.list_button_select)
@@ -705,6 +748,14 @@ class MainWindow:
     @handle_exceptions
     def manage_finder_select(self, *_, upc):
         self.manage_search_box.configure(text=upc)
+
+        # flash white
+        frames = 10
+        time = 0.09  # time in seconds to finish flash
+        for i, hex_int in enumerate(range(255, 71, -9)):
+            hex_str = "#"+str(hex(hex_int)).strip("0x").zfill(2)*3
+            print(hex_str)
+            self.window.after(int((time*1000)*(i/frames)), lambda h=hex_str: self.manage_search_box.configure(fg_color=h))
 
     @handle_exceptions
     def width_splice(self, text, font_size, max_width=650, use_dict=False):
@@ -771,13 +822,13 @@ class MainWindow:
             print("this should not be here!")
 
         try:
-            with Organizer("postgres") as _:
+            with Organizer("postgres", dbname=self.db_name) as _:
                 # we were able to access postgres
                 self.postgres_exists = True
 
             # now we should be able to connect as a customer with no problem
             print("try to connect")
-            self.controller = Organizer("customer")
+            self.controller = Organizer(f"customer_{self.db_name}", dbname=self.db_name)
             print("connected")
 
             self.connection = True
@@ -890,7 +941,7 @@ class MainWindow:
         print("new search term:", search_term)
 
         # search for the matching users
-        users = self.controller.user_search(search_term, use_full_names=True)
+        users = self.controller.user_search(search_term, use_full_names=True, columns={"first_name": True, "last_name": True})
         self.reverse_users = {data: uid for uid, data in users.items()}
         names_list = list(self.reverse_users.keys())
         names_list = [item[1] for item in names_list]
@@ -928,7 +979,7 @@ class MainWindow:
         if result == "-CHECKOUT_SUCCESS-":
             self.popup_msg("Part checked out successfully", "success")
             tmp_key = self.selected_part_key
-            self.raise_search("part", select=tmp_key)
+            self.raise_search("part")
 
             print("reselect with", tmp_key)
             def reselect(): self.list_button_select(database_key=tmp_key)
@@ -1044,7 +1095,7 @@ class MainWindow:
         id_upc = self.manage_search_box.cget("text")
 
         # go ahead and complain if there is nothing in the field
-        if not id_upc:
+        if not id_upc or id_upc == "No Part Selected" or id_upc == "No User Selected":
             self.popup_msg("Please enter a valid id/upc")
             return "-QUIT-"
 
@@ -1203,9 +1254,11 @@ class MainWindow:
     def reconnect_db(self):
         # make a connection to the database
         try:
-            self.controller = Organizer()
+            self.controller = Organizer(f"customer_{self.db_name}", dbname=self.db_name)
+            self.connection = True
         except Exception as er:
             # raise er
+            self.connection = False
             self.popup_msg(er)
 
     @handle_exceptions
@@ -1268,12 +1321,12 @@ class MainWindow:
 
         # try to format the database as postgres
         try:
-            with Organizer("postgres") as postgres:
-                postgres.format_database()
+            with Organizer("postgres", dbname=self.db_name) as postgres:
+                postgres.format_database(self.db_name)
             self.popup_msg("Database formatted successfully", "success")
         except Exception as error:
-            self.popup_msg(str(error))
-            # raise error
+            # self.popup_msg(str(error))
+            raise error
         finally:
             self.reconnect_db()
 
@@ -1291,8 +1344,8 @@ class MainWindow:
 
         # try to format the database as postgres
         try:
-            with Organizer() as postgres:
-                postgres.populate_db()
+            with Organizer(f"customer_{self.db_name}", dbname=self.db_name) as postgres:
+                postgres.populate_db(self.db_name)
                 self.popup_msg("Database populated successfully", "success")
         except Exception as error:
             self.popup_msg(str(error))
@@ -1398,11 +1451,12 @@ class MainWindow:
         self.manage_parts_frame.tkraise()
 
     @handle_exceptions
-    def raise_search(self, search_type, select=None):
+    def raise_search(self, search_type):
         """clear the search box and raise either 'part search' or 'user search' depending on the search_type"""
 
         # clear the selected part key, as no part is selected
         self.selected_part_key = None
+        for button in self.check_in_out_buttons: button.configure(**button_disable)
 
         # try again to connect to the database
         if (not self.controller) or self.controller.cursor_exists():
@@ -1416,13 +1470,12 @@ class MainWindow:
 
         # search header
         if self.search_mode == "part":
-            self.search_labels.configure(text="  "+list_button_format(("Part Number", "Manufacturer", "UPC", "Date Added", "Home", "Description", "status"), "part"), anchor="w")
-            self.blank_frame.grid_forget()
-            self.thin_frame.grid(column=0, row=2, columnspan=2, sticky="NEWS", padx=27)
+            self.search_labels.configure(text="  "+list_button_format(("Part Number", "Manufacturer", "UPC", "Date Added", "Home", "Description", "Status"), "part"), anchor="w")
+            self.check_in_out_frame.pack()
         else:
             self.search_labels.configure(text="  "+list_button_format(("User ID", "Name", "Email"), "user"), anchor="w")
+            self.check_in_out_frame.pack_forget()
             self.thin_frame.grid_forget()
-            self.blank_frame.grid(column=0, row=2, columnspan=2, sticky="NEWS", padx=27)
 
         print("search box before config:", self.search_box.get())
         # self.search_box.configure(placeholder_text=f"Search for a {self.search_mode}")
@@ -1443,6 +1496,9 @@ class MainWindow:
         active = self.check_db_connection()
         self.clear_part_results()
         if not active: return
+
+        # scroll back to the top
+        self.result_parts._parent_canvas.yview_moveto(0)
 
         search = self.search_box.get()
         if self.search_mode == "part":
@@ -1523,7 +1579,7 @@ class MainWindow:
 
         try:
             button = self.part_widgets[button_index]
-        except:
+        except:     # who knows what could happen with this one
             return
 
         if database_key.lower() == "no matching items": return
@@ -1548,6 +1604,13 @@ class MainWindow:
             if len(part_info["Parts checked out"]) < 1:
                 part_info["Parts checked out"] = "None"
 
+        # grey out either "check out" or "check in"
+        active = 0 if button.cget("text")[0] == "A" else 1
+        disabled = 1-active
+
+        self.check_in_out_buttons[active].configure(**button_enable)
+        self.check_in_out_buttons[disabled].configure(**button_disable)
+
         # display the part info
         self.clear_output_box()
 
@@ -1556,9 +1619,8 @@ class MainWindow:
         loading.pack()
 
         # make a holder for the content
-        print("part info:")
         for key, value in part_info.items():
-            print(f"\tkey: {key},\tvalue: {value}")
+            print(f"\tkey: {key}, \tvalue: {value}")
             # generate a frame to put the item and text side by side
             item_frame = ctk.CTkFrame(self.output_box, fg_color="transparent")
 
@@ -1606,5 +1668,3 @@ class MainWindow:
         button.configure(fg_color="#1f6ba5")
         self.selected_part = button
         self.selected_part_key = database_key
-
-        print("finished select prompt")
