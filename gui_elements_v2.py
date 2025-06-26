@@ -10,7 +10,6 @@ from db_interactions import Organizer
 import psycopg2.errors as p2er
 from re import compile, split as re_split
 from webbrowser import open as web_open
-from tkinter import TclError
 
 # theme stuff; colors and fonts
 ctk.set_appearance_mode("dark")
