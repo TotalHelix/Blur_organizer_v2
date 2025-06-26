@@ -10,7 +10,7 @@ from db_interactions import Organizer
 import psycopg2.errors as p2er
 from re import compile, split as re_split
 from webbrowser import open as web_open
-from time import sleep
+from tkinter import TclError
 
 # theme stuff; colors and fonts
 ctk.set_appearance_mode("dark")
@@ -198,13 +198,14 @@ class MainWindow:
         # database credentials
         self.db_name = db_name
 
-        # initial setup
+        # start the window (I know that your animations don't exist)
         self.window = ctk.CTk()
+
+        # initial setup
         self.window.geometry("1000x700")
         self.window.grid_columnconfigure(1, weight=1)
         self.window.grid_rowconfigure(0, weight=0)
         self.window.grid_rowconfigure(1, weight=1)
-        # self.window.resizable(False, False)
         self.window.title("Blur Part Organizer")
         self.popup_counter = 0
         self.form_mode_add = True
