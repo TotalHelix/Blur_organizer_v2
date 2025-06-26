@@ -1,13 +1,32 @@
+import json
+
 from gui_elements_v2 import MainWindow, ctk
+import os
+import lorem
 
 
 # define fonts
 title = ("Arial", 20)
 subtitle = ("Ariel", 18)
-db_dict = {"Parts": "parts_organizer_db", "General": "my_new_database"}
 selected_database = ""
 global select_db_var
 global selector_window
+global options_menu
+
+# json of remembered databases
+json_location = os.getenv("APPDATA") + "\\Blur_Part_Organizer\\"
+json_file_name = "saved_databases.json"
+json_path = json_location+json_file_name
+if os.path.exists(json_path):
+    with open(json_path, "r") as read_json_file:
+        db_dict = json.load(read_json_file)
+else:
+    os.makedirs(json_location, exist_ok=True)
+    db_dict = {}
+
+
+def random_word():
+    return lorem.sentence().split(" ")[1]
 
 
 def start_button():
@@ -18,9 +37,21 @@ def start_button():
     selector_window.destroy()
 
 
+def create_new():
+    print("create_new_fired")
+    global db_dict
+    global options_menu
+
+    db_dict[str(random_word())] = random_word()
+    # TODO not sure how do properly do this ⬇
+    options_menu.values = list(db_dict.keys())
+    print("assigned")
+
+
 def database_selector():
     global selector_window
     global select_db_var
+    global options_menu
     selector_window = ctk.CTk()
     selector_window.resizable(False, False)
 
@@ -33,7 +64,8 @@ def database_selector():
 
     # dropdown
     select_db_var = ctk.StringVar(value="- Select -")
-    ctk.CTkOptionMenu(selector_window, width=350, height=35, values=list(db_dict.keys()), variable=select_db_var, fg_color="#171717", button_color="#171717").pack(padx=150, pady=10)
+    options_menu = ctk.CTkOptionMenu(selector_window, width=350, height=35, values=list(db_dict.keys()), variable=select_db_var, fg_color="#171717", button_color="#171717")
+    options_menu.pack(padx=150, pady=10)
 
     # Start and Edit buttons
     se_frame = ctk.CTkFrame(selector_window, fg_color="transparent")
@@ -47,7 +79,7 @@ def database_selector():
     # Create New and Connect Existing buttons
     cnce_frame = ctk.CTkFrame(selector_window, fg_color="transparent")
     cnce_frame.pack()
-    ctk.CTkButton(cnce_frame, text="Create New").grid(row=0, column=0, padx=20, pady=2)
+    ctk.CTkButton(cnce_frame, text="Create New", command=create_new).grid(row=0, column=0, padx=20, pady=2)
     ctk.CTkButton(cnce_frame, text="Connect Existing").grid(row=0, column=1, padx=20)
 
     # empty space at bottom
@@ -58,6 +90,10 @@ def database_selector():
 
 if __name__ == "__main__":
     database_selector()
+
+    # write to the json file
+    with open(json_path, "w") as f:
+        json.dump(db_dict, f, indent=4)
 
     print(f"selected database: {selected_database}")
 
