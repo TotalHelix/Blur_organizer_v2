@@ -100,7 +100,7 @@ def db_add_gui(part_to_edit=None):
 
     # Confirm Cancel
     cc_frame = ctk.CTkFrame(form_window, fg_color="transparent")
-    ctk.CTkButton(cc_frame, text="Confirm", command=lambda: accept_db_form(form_answers, form_window)).grid(row=0, column=0, padx=10)
+    ctk.CTkButton(cc_frame, text="Confirm", command=lambda: accept_db_form(form_answers, form_window, part_to_edit)).grid(row=0, column=0, padx=10)
     ctk.CTkButton(cc_frame, text="Cancel", command=form_window.destroy).grid(row=0, column=1, padx=10)
     cc_frame.pack(pady=30)
 
@@ -108,7 +108,7 @@ def db_add_gui(part_to_edit=None):
     print("form closed")
 
 
-def accept_db_form(entry_widgets, form_window):
+def accept_db_form(entry_widgets, form_window, edit_entry):
     """
     Take all the entry widgets in the "create new database" form and add them to the dictionary
     :param entry_widgets: A list of length 2: [str Display Name, str Database Name]
@@ -168,7 +168,7 @@ def database_selector():
     se_frame = ctk.CTkFrame(selector_window, fg_color="transparent")
     se_frame.pack()
     ctk.CTkButton(se_frame, text="Start!", command=start_button).grid(row=0, column=0, padx=20, pady=2)
-    ctk.CTkButton(se_frame, text="Edit").grid(row=0, column=1, padx=20)
+    ctk.CTkButton(se_frame, text="Edit", command=lambda: db_add_gui([select_db_var.get(), db_dict[select_db_var.get()]])).grid(row=0, column=1, padx=20)
 
     # OR
     ctk.CTkLabel(selector_window, text="OR").pack(pady=15)
