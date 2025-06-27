@@ -26,10 +26,21 @@ else:
 
 
 def random_word():
+    """
+    generate a single random word, all lowercase
+    :return: the second word of a lorem ipsum random sentence.
+    """
+
     return lorem.sentence().split(" ")[1]
 
 
 def start_button():
+    """
+    Function for when the start button is pressed. Takes the current database selected in the options menu and launches
+        the program centered for that database.
+    Destroys the selector window when called.
+    :return: None
+    """
     print("start button hit")
     global selected_database
     global selector_window
@@ -38,17 +49,103 @@ def start_button():
 
 
 def create_new():
-    print("create_new_fired")
+    """
+    Opens the gui to create a new database
+    :return: None
+    """
     global db_dict
     global options_menu
 
-    db_dict[str(random_word())] = random_word()
-    # TODO not sure how do properly do this ⬇
-    options_menu.values = list(db_dict.keys())
-    print("assigned")
+    db_add_gui()
+
+    # update the options menu
+    update_options()
+
+
+def db_add_gui(part_to_edit=None):
+    """
+    Bring up the form for adding a new database.
+    :param part_to_edit: list [display name, database name] of database option that you want to edit. If this option
+        is left blank then the form will add a new part instead.
+    :return: None. Edits the db_dict dictionary.
+    """
+
+    ####################
+    # Create the GUI
+    ####################
+
+    # new window
+    form_window = ctk.CTk()
+    form_window.resizable(False, False)
+
+    # form questions
+    form_questions = ["Display Name", "Database Name"]
+    form_answers = []
+    if part_to_edit:
+        fill_text = part_to_edit
+    else:
+        fill_text = ["" for _ in range(2)]
+
+    for i, question in enumerate(form_questions):
+        # space
+        ctk.CTkLabel(form_window, text="").pack(padx=150)
+
+        # question text
+        ctk.CTkLabel(form_window, text=question, font=subtitle).pack()
+
+        # input box
+        question_input_box = ctk.CTkEntry(form_window, width=200, height=30, placeholder_text=fill_text[i])
+        question_input_box.pack()
+        form_answers.append(question_input_box)
+
+    # Confirm Cancel
+    cc_frame = ctk.CTkFrame(form_window, fg_color="transparent")
+    ctk.CTkButton(cc_frame, text="Confirm", command=lambda: accept_db_form(form_answers, form_window)).grid(row=0, column=0, padx=10)
+    ctk.CTkButton(cc_frame, text="Cancel", command=form_window.destroy).grid(row=0, column=1, padx=10)
+    cc_frame.pack(pady=30)
+
+    form_window.mainloop()
+    print("form closed")
+
+
+def accept_db_form(entry_widgets, form_window):
+    """
+    Take all the entry widgets in the "create new database" form and add them to the dictionary
+    :param entry_widgets: A list of length 2: [str Display Name, str Database Name]
+    :param form_window: the window of the form so that it can be closed
+    :return: None
+    """
+    update_options(
+        entry_widgets[0].get(),  # display name
+        entry_widgets[1].get()   # database name
+    )
+
+    form_window.destroy()
+
+
+def update_options(display_name=None, db_name=None):
+    """
+    Refresh the OptionsMenu and optionally add a new value at the same time
+    ** If either display_name or db_name is left blank a new entry will NOT be added. **
+
+    :param display_name: optional new item to add to the list. This is the name that will be displayed in the GUI
+    :param db_name: the database actual name that will be fired when the display name above is clicked.
+    :return: None
+    """
+    global db_dict
+
+    if display_name and db_name:
+        db_dict[display_name] = db_name
+
+    options_menu.configure(values=list(db_dict.keys()))
 
 
 def database_selector():
+    """
+    The main database selector program. This is where a user picks a database
+    :return: None. The selected database is stored in the global `selected_db_var` StringVar, get it with
+        `selected_database_string = selected_db_var.get()`
+    """
     global selector_window
     global select_db_var
     global options_menu
