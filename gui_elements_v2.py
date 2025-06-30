@@ -151,7 +151,10 @@ def stackable_frame(master, text, desc, button_text, command):
     ctk.CTkLabel(frame_house, text=desc, font=("Ariel", 16), anchor="nw").grid(column=0, row=1, sticky="w", padx=15, pady=5)
 
     # button
-    ctk.CTkButton(frame_house, text=button_text, **color_red, command=command).grid(column=1, row=0, rowspan=2, padx=8)
+    ctk.CTkButton(frame_house, text=button_text, **color_red, command=command).grid(column=2, row=0, rowspan=2, padx=8)
+
+    # spacer
+    ctk.CTkLabel(frame_house, text="").grid(column=3, row=0, padx=17)
 
 
 def max_length_validate(text, length):
@@ -172,7 +175,7 @@ def handle_exceptions(func):
             args[0].popup_msg(str(er))
             print("we were here...")
             print(er)
-            raise er  # TODO: comment this out again when you deploy (it will crash the program)
+            # raise er  # TODONE: comment this out again when you deploy (it will crash the program)
     return wrapper
 
 
@@ -389,7 +392,8 @@ class MainWindow:
 
         data = [  # Title, Description, Button text, command
             ("Format Database", "Resets the database with all default tables", "Format", self.format_database),
-            ("Populate Database", "Fills the database up with random data. Useful for testing", "Populate", self.populate_database)
+            ("Populate Database", "Fills the database up with random data. Useful for testing", "Populate", self.populate_database),
+            ("Drop Database", "Completely delete the database. This window might no longer function as expected until the database is reformatted.", "Drop", self.drop_db)
         ]
 
         for args in data:
@@ -1304,6 +1308,24 @@ class MainWindow:
             # can't connect to a database
             self.popup_msg("We couldn't find a database to connect to. Make sure that postgreSQL is installed.")
             return False
+
+    @handle_exceptions
+    def drop_db(self):
+        """get rid of the db"""
+
+        # confirm if the user wants to nuke everything
+        self.popup_prompt("Are you sure?\nThis will delete everything in the database.")
+        if not (self.prompt_response.lower() == "yes" or self.prompt_response.lower() == "confirm"):
+            return
+
+        # make sure that we are able to connect to the database
+        if not self.check_db_connection(accept_postgres=True): return
+
+        # try to format the database as postgres
+        with Organizer("postgres", dbname=self.db_name) as postgres:
+            postgres.drop_db(self.db_name)
+        self.popup_msg("Database dropped successfully", "success")
+
 
     @handle_exceptions
     def format_database(self):

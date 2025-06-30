@@ -9,6 +9,7 @@ import lorem
 title = ("Arial", 20)
 subtitle = ("Ariel", 18)
 selected_database = ""
+red_button = {"fg_color": "#d62c20", "hover_color": "#781610"}
 global select_db_var
 global selector_window
 global options_menu
@@ -41,10 +42,15 @@ def start_button():
     Destroys the selector window when called.
     :return: None
     """
-    print("start button hit")
     global selected_database
     global selector_window
+
     selected_database = select_db_var.get()
+
+    # don't start if no database is selected
+    if selected_database == "- Select -": return
+
+    # close the selector window
     selector_window.destroy()
 
 
@@ -62,13 +68,31 @@ def create_new():
     update_options()
 
 
-def db_add_gui(part_to_edit=None):
+def db_add_gui(edit_mode=False):
     """
     Bring up the form for adding a new database.
-    :param part_to_edit: list [display name, database name] of database option that you want to edit. If this option
+    :param edit_mode: list [display name, database name] of database option that you want to edit. If this option
         is left blank then the form will add a new part instead.
     :return: None. Edits the db_dict dictionary.
     """
+    global db_dict
+    global select_db_var
+
+    if edit_mode:
+        part_display = select_db_var.get()
+
+        # make sure a valid db has been selected
+        print(f"part_to_edit not in list(db_dict.keys()): {part_display not in list(db_dict.keys())}")
+        print(f"part_to_edit: {part_display}, list(db_dict.keys()): {list(db_dict.keys())}")
+        if edit_mode and part_display not in list(db_dict.keys()): return
+
+        part_database = db_dict[part_display]
+        part_to_edit = [part_display, part_database]
+        fill_text = part_to_edit
+
+    else:
+        fill_text = ["" for _ in range(2)]
+        part_display = None
 
     ####################
     # Create the GUI
@@ -81,10 +105,6 @@ def db_add_gui(part_to_edit=None):
     # form questions
     form_questions = ["Display Name", "Database Name"]
     form_answers = []
-    if part_to_edit:
-        fill_text = part_to_edit
-    else:
-        fill_text = ["" for _ in range(2)]
 
     for i, question in enumerate(form_questions):
         # space
@@ -100,42 +120,94 @@ def db_add_gui(part_to_edit=None):
 
     # Confirm Cancel
     cc_frame = ctk.CTkFrame(form_window, fg_color="transparent")
-    ctk.CTkButton(cc_frame, text="Confirm", command=lambda: accept_db_form(form_answers, form_window, part_to_edit)).grid(row=0, column=0, padx=10)
+    ctk.CTkButton(cc_frame, text="Confirm", command=lambda: accept_db_form(form_answers, form_window, part_display)).grid(row=0, column=0, padx=10)
     ctk.CTkButton(cc_frame, text="Cancel", command=form_window.destroy).grid(row=0, column=1, padx=10)
+    if edit_mode: ctk.CTkButton(cc_frame, text="Delete", command=lambda: delete_db_link(part_display, form_window), **red_button).grid(row=1, column=0, columnspan=2, pady=12)
     cc_frame.pack(pady=30)
 
     form_window.mainloop()
     print("form closed")
 
 
-def accept_db_form(entry_widgets, form_window, edit_entry):
+# :3 nyaa
+def delete_db_link(db_display_name, form_window=None):
+    """
+    Delete the database, and optionally close the form window
+    :param form_window: optional tkinter window to close.
+    :param db_display_name: The display name of the database to delete from the dictionary.
+    :return: None
+    """
+    global db_dict
+    global select_db_var
+
+    del db_dict[db_display_name]
+    form_window.destroy()
+    update_options()
+
+    select_db_var.set(list(db_dict.keys())[0])
+
+
+def value_or_default(entry_widget):
+    """
+    If there is text in the entry widget, return that. Otherwise, return the placeholder text.
+    :param entry_widget:
+    :return:
+    """
+
+    # try to get the entry text first
+    entry_text = entry_widget.get()
+    if entry_text: return entry_text
+
+    # get the placeholder text
+    return entry_widget.cget("placeholder_text")
+
+
+def accept_db_form(entry_widgets, form_window, edit_entry=None):
     """
     Take all the entry widgets in the "create new database" form and add them to the dictionary
     :param entry_widgets: A list of length 2: [str Display Name, str Database Name]
     :param form_window: the window of the form so that it can be closed
+    :param edit_entry: string display name of the part that you're editing. Adds new part if value is None (default)
     :return: None
     """
+    global select_db_var
+
+    new_display_name = value_or_default(entry_widgets[0])
+    new_db_name      = value_or_default(entry_widgets[1])
+
+    # update the option
     update_options(
-        entry_widgets[0].get(),  # display name
-        entry_widgets[1].get()   # database name
+        new_display_name,   # display name
+        new_db_name,        # database name
+        edit_entry          # old display name to delete
     )
 
+    # select the new option
+    select_db_var.set(new_display_name)
     form_window.destroy()
 
 
-def update_options(display_name=None, db_name=None):
+def update_options(display_name=None, db_name=None, old_display_name=None):
     """
     Refresh the OptionsMenu and optionally add a new value at the same time
     ** If either display_name or db_name is left blank a new entry will NOT be added. **
 
     :param display_name: optional new item to add to the list. This is the name that will be displayed in the GUI
     :param db_name: the database actual name that will be fired when the display name above is clicked.
+    :param old_display_name: string name of the dictionary entry to remove.
     :return: None
     """
     global db_dict
 
+    print(f"started with old_display_name of \"{old_display_name}\"")
     if display_name and db_name:
+        print(f"accepted entries {display_name} and {db_name}.")
+        if old_display_name:
+            print("deleting old part" + old_display_name)
+            del db_dict[old_display_name]
+
         db_dict[display_name] = db_name
+        print(f"added new entry \"{display_name}\": \"{db_name}\"")
 
     options_menu.configure(values=list(db_dict.keys()))
 
@@ -168,7 +240,7 @@ def database_selector():
     se_frame = ctk.CTkFrame(selector_window, fg_color="transparent")
     se_frame.pack()
     ctk.CTkButton(se_frame, text="Start!", command=start_button).grid(row=0, column=0, padx=20, pady=2)
-    ctk.CTkButton(se_frame, text="Edit", command=lambda: db_add_gui([select_db_var.get(), db_dict[select_db_var.get()]])).grid(row=0, column=1, padx=20)
+    ctk.CTkButton(se_frame, text="Edit", command=lambda: db_add_gui(True)).grid(row=0, column=1, padx=20)
 
     # OR
     ctk.CTkLabel(selector_window, text="OR").pack(pady=15)

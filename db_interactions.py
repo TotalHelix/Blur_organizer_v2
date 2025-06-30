@@ -247,6 +247,25 @@ class Organizer:
         self.cursor.execute(f"SELECT * FROM parts WHERE part_upc = {upc}")
         return self.cursor.fetchall()
 
+    def drop_db(self, db_name):
+        """disconnect from the selected database and then drop it"""
+        # disconnect from db
+        terminate_conn = f"""
+            SELECT pg_terminate_backend(pid) 
+            FROM pg_stat_activity 
+            WHERE 
+                pid <> pg_backend_pid()
+                AND datname = '{db_name}';
+            """
+        self.cursor.execute(terminate_conn)
+        self.refresh_cursor()
+
+        # drop database
+        drop_db = f"DROP DATABASE {db_name};"
+        self.cursor.execute(drop_db)
+
+        self.conn.commit()
+
     def format_database(self, db_name):
         """set up all the tables of the database"""
 
@@ -259,22 +278,7 @@ class Organizer:
         if db_name in [name[0] for name in self.cursor.fetchall()]:
             print("there was a database in there")
 
-            # disconnect from db
-            terminate_conn = f"""
-            SELECT pg_terminate_backend(pid) 
-            FROM pg_stat_activity 
-            WHERE 
-                pid <> pg_backend_pid()
-                AND datname = '{db_name}';
-            """
-            self.cursor.execute(terminate_conn)
-            self.refresh_cursor()
-
-            # drop database
-            drop_db = f"DROP DATABASE {db_name};"
-            self.cursor.execute(drop_db)
-
-            self.conn.commit()
+            self.drop_db(db_name)
 
         # create a new database
         new_db_sql = f"CREATE DATABASE {db_name};"
