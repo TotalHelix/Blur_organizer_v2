@@ -1,6 +1,6 @@
 import json
-
-from gui_elements_v2 import MainWindow, ctk
+from CTkMessagebox import CTkMessagebox
+from gui_elements_v2 import MainWindow, ctk, Organizer
 import os
 import lorem
 
@@ -68,11 +68,13 @@ def create_new():
     update_options()
 
 
-def db_add_gui(edit_mode=False):
+def db_add_gui(edit_mode=False, add_db_name=""):
     """
     Bring up the form for adding a new database.
     :param edit_mode: list [display name, database name] of database option that you want to edit. If this option
         is left blank then the form will add a new part instead.
+    :param add_db_name: the database name of the part that you are adding. This is used for adding a database from the
+        "Connect Existing" gui
     :return: None. Edits the db_dict dictionary.
     """
     global db_dict
@@ -91,7 +93,7 @@ def db_add_gui(edit_mode=False):
         fill_text = part_to_edit
 
     else:
-        fill_text = ["" for _ in range(2)]
+        fill_text = ["", add_db_name]
         part_display = None
 
     ####################
@@ -100,6 +102,7 @@ def db_add_gui(edit_mode=False):
 
     # new window
     form_window = ctk.CTk()
+    form_window.title = "Database Info"
     form_window.resizable(False, False)
 
     # form questions
@@ -126,10 +129,8 @@ def db_add_gui(edit_mode=False):
     cc_frame.pack(pady=30)
 
     form_window.mainloop()
-    print("form closed")
 
 
-# :3 nyaa
 def delete_db_link(db_display_name, form_window=None):
     """
     Delete the database, and optionally close the form window
@@ -140,11 +141,26 @@ def delete_db_link(db_display_name, form_window=None):
     global db_dict
     global select_db_var
 
+    # Are you sure?
+    popup = CTkMessagebox(
+        title="Are you sure?",
+        message="This will only delete the database link and NOT the actual data.",
+        icon="warning",
+        option_1="Delete",
+        option_2="Cancel"
+    )
+
+    # again, answer isn't delete is safer than answer is cancel.
+    if popup.get() != "Delete": return
+
     del db_dict[db_display_name]
     form_window.destroy()
     update_options()
 
-    select_db_var.set(list(db_dict.keys())[0])
+    if len(db_dict) > 0:
+        select_db_var.set(list(db_dict.keys())[0])
+    else:
+        select_db_var.set("- Select -")
 
 
 def value_or_default(entry_widget):
@@ -222,6 +238,7 @@ def database_selector():
     global select_db_var
     global options_menu
     selector_window = ctk.CTk()
+    selector_window.title("Connect the Organizer to a database")
     selector_window.resizable(False, False)
 
     ################################
@@ -249,12 +266,48 @@ def database_selector():
     cnce_frame = ctk.CTkFrame(selector_window, fg_color="transparent")
     cnce_frame.pack()
     ctk.CTkButton(cnce_frame, text="Create New", command=create_new).grid(row=0, column=0, padx=20, pady=2)
-    ctk.CTkButton(cnce_frame, text="Connect Existing").grid(row=0, column=1, padx=20)
+    ctk.CTkButton(cnce_frame, text="Connect Existing", command=connect_existing).grid(row=0, column=1, padx=20)
 
     # empty space at bottom
     ctk.CTkLabel(selector_window, text="").pack()
 
     selector_window.mainloop()
+
+
+def connect_existing():
+    """Connect to a postgres database that already exists"""
+    print("Hey guys! 🐶")
+
+    # list default
+    db_list = ["No Databases Found"]
+
+    # try to get databases
+    try:
+        with Organizer(user="postgres") as pg:
+            db_list = [item[0] for item in pg.select_all_db()]
+
+    # give an error message if we can't get a database
+    except Exception as er:
+        CTkMessagebox(title="Error", message="Something went wrong!\nError: "+str(er), option_1="OK", icon="cancel")
+
+    # db selector window
+    db_con_window = ctk.CTk()
+    db_con_window.title("Existing database to add")
+    db_con_window.resizable(False, False)
+
+    # frame to hold all the databases
+    db_disp_frame = ctk.CTkScrollableFrame(db_con_window)
+    for db_name in db_list:
+        new_button = ctk.CTkButton(db_disp_frame, text=db_name, fg_color="transparent", command=lambda n=db_name: db_add_gui(add_db_name=n))
+
+        new_button.pack()
+    db_disp_frame.pack(padx=13, pady=13)
+
+    # Done button
+    ctk.CTkButton(db_con_window, text="Done", command=db_con_window.destroy).pack(pady=13)
+
+    # start the window
+    db_con_window.mainloop()
 
 
 if __name__ == "__main__":
