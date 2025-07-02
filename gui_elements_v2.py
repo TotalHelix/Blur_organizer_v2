@@ -464,7 +464,18 @@ class MainWindow:
         self.kiosk_frame.grid(row=0, column=0, sticky="news")
 
         ctk.CTkLabel(self.kiosk_frame, text="Scan a part or enter a UPC code", font=title).place(relx=0.5, rely=0.12, anchor=ctk.CENTER)
-        self.kiosk_entry = ctk.CTkEntry(self.kiosk_frame, width=500, height=40).place(relx=0.5, rely=0.2, anchor=ctk.CENTER)
+        self.kiosk_entry = ctk.CTkEntry(self.kiosk_frame, width=500, height=40)
+        self.kiosk_entry.place(relx=0.5, rely=0.2, anchor=ctk.CENTER)
+
+        # the buttons that appear on kiosk mode when you enter a valid code
+        kiosk_next_step = ctk.CTkFrame(self.kiosk_frame, width=1000, height=500, fg_color="transparent")
+        kiosk_next_step.place(relx=0.5, rely=0.5, anchor=ctk.CENTER)
+
+        button_size = 250
+
+        for index, image_path in enumerate(("images/Check_Out.png", "images/Return.png")):
+            image = ctk.CTkImage(Image.open(image_path), size=(button_size, button_size))
+            ctk.CTkButton(kiosk_next_step, image=image, text="", corner_radius=100).grid(row=0, column=index*2, padx=50)
 
         #######################
         # add new part form
@@ -1434,6 +1445,7 @@ class MainWindow:
     def raise_kiosk(self):
         """Enter kiosk mode"""
         self.kiosk_frame.tkraise()
+        self.kiosk_entry.focus()
 
     @handle_exceptions
     def raise_manage(self, search_type):
