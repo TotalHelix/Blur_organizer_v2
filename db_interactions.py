@@ -328,8 +328,8 @@ class Organizer:
                 [
                     # name                  data type                       len     primary key references                  extra tags
                     ["part_upc",            "bigint",                       None,   True,       None,                       "NOT NULL"],
-                    ["part_placement",      "varchar",                      "4",    False,      None,                       "NOT NULL"],  # UNIQUE"],
-                    ["mfr_pn",              "varchar",                      "255",  False,      None,                       "NOT NULL"],
+                    ["part_placement",      "varchar",                      "26",    False,      None,                       "NOT NULL"],  # UNIQUE"],
+                    ["mfr_pn",              "varchar",                      "26",  False,      None,                       "NOT NULL"],
                     ["part_mfr",            "varchar",                      "255",  False,      'manufacturers; mfr_id',    "NOT NULL"],
                     ["part_desc",           "varchar",                      None,   False,      None,                       "NOT NULL"],
                     ["url",                 "varchar",                      None,   False,      None,                       ""],
@@ -850,7 +850,7 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
                 break
 
         # capitalize the placement
-        placement = placement.upper()
+        placement = placement
         # make apostrophes safe
         safe_desc = desc.replace("'", "''")
         safe_mfr_pn = mfr_pn.replace("'", "''")
@@ -991,7 +991,7 @@ Please click "Add part" to add a part for the first time"""
         # convert the mfr if a name is given instead of an id
         if isinstance(mfr, str) and not mfr.isnumeric():
 
-            placement = placement.upper()
+            placement = placement
 
             new_mfr = self.mfr_id_from_name(mfr)
             # if the new manufacturer isn't in the database

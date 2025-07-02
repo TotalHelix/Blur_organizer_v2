@@ -1,4 +1,5 @@
 import math
+import warnings
 from os import remove as os_remove
 import tkinter as tk
 import urllib
@@ -74,7 +75,7 @@ def list_button_format(text, search_mode):
         final_string = ""  # text[6] + "  "
         text = [text[6], *text[:6]]
         print(text)
-        lengths = [24, 21, 16, 14, 12, 5, 50]
+        lengths = [24, 21, 16, 14, 12, 16, 34]
     else:
         final_string = ""
         lengths = [17, 22, 30]
@@ -230,10 +231,11 @@ class MainWindow:
         side_buttons = {
             # these have to be lambda again because the frames haven't been defined yet.
             "Home": self.raise_home_frame,
-            "Part Checkout": lambda: self.raise_search("part"),
+            "Part Search": lambda: self.raise_search("part"),
             "User Search": lambda: self.raise_search("user"),
             "Manage Parts": lambda: self.raise_manage("part"),
-            "Manage Users": lambda: self.raise_manage("user")
+            "Manage Users": lambda: self.raise_manage("user"),
+            "Kiosk Mode": lambda : self.raise_kiosk()
         }
         for button_name, cmd in side_buttons.items():
             button = ctk.CTkButton(l_col, text=button_name, command=cmd)
@@ -454,13 +456,23 @@ class MainWindow:
 
         self.blank_frame.grid(column=0, row=2, columnspan=2, sticky="NEWS", padx=27)
 
+        #############
+        # Kiosk Mode
+        #############
+
+        self.kiosk_frame = ctk.CTkFrame(self.workspace)
+        self.kiosk_frame.grid(row=0, column=0, sticky="news")
+
+        ctk.CTkLabel(self.kiosk_frame, text="Scan a part or enter a UPC code", font=title).place(relx=0.5, rely=0.12, anchor=ctk.CENTER)
+        self.kiosk_entry = ctk.CTkEntry(self.kiosk_frame, width=500, height=40).place(relx=0.5, rely=0.2, anchor=ctk.CENTER)
+
         #######################
         # add new part form
         #######################
         self.part_questions = {  # "field": (max length, required)
-            "Manufacturer": (255, True),
-            "Manufacturer's part number": (255, False),
-            "Placement location": (4, True),
+            "Manufacturer": (26, True),
+            "Manufacturer's part number": (26, False),
+            "Placement location": (255, True),
             "Description": (0, True),
             "Link to original part": (0, False)
         }
@@ -576,16 +588,12 @@ class MainWindow:
         try:
             # raise Exception("forced exception")
             try:
-                print("searching for file")
                 readme = open("README.md", "r")
                 document = "\n".join([s.rstrip() for s in readme.readlines()]).split("\n"*2)
-                print("file found!")
+
             except FileNotFoundError as err:
-                print(f"file not found? err: {err}")
-                print("trying to get request...")
                 readme = requests.get("https://github.com/TotalHelix/Blur_organizer_v2/raw/main/README.md").text
                 document = "\n".join([s.rstrip() for s in readme.split("\n")]).split("\n"*2)
-                print(f"finished requests. text: {document}")
 
             for line in document:
                 line = line.replace("\n", " ")
@@ -609,7 +617,7 @@ class MainWindow:
                         # if the image can't load
                         line_len = 40
                         text = "\n".join((str(err) + " "*line_len)[i * line_len: (i+1) * line_len] for i in range(math.ceil(len(str(err))/line_len)))
-                        print(text)
+
                         # ctk.CTkLabel(self.home_frame, width=300, height=300, text=f"We couldn't load this image. to see the image,\n click on the link below.", fg_color="#5e5e5e").pack()
                         hyperlink = ctk.CTkLabel(self.home_frame, cursor="hand2", text=f"View Image \"{alt_text}\" in browser.", text_color="#a4a2f2", font=subtitle, anchor="w")
                         hyperlink.pack(fill="both", expand=True, padx=25, pady=10)
@@ -676,7 +684,6 @@ class MainWindow:
             ).grid(row=0, column=1)
             # raise e  # TODONE comment this out again
         finally:
-            print("zooming!")
             self.window.attributes('-fullscreen', True)
             # self.window.state("zoomed")
 
@@ -695,9 +702,8 @@ class MainWindow:
         self.manage_finder_scrollbox.parent_canvas.yview_moveto(0)
 
         if self.search_mode == "part":
-            self.manage_finder_scrollbox_key.configure(text="  "+list_button_format(("Part Number", "Manufacturer", "UPC", "Date Added", "Home", "Description", "Status"), "part"))
+            self.manage_finder_scrollbox_key.configure(text="  "+list_button_format(("Part Number", "Manufacturer", "UPC", "Date Added", "Location", "Description", "Status"), "part"))
             result = self.controller.part_search(search_term)
-            print("result:", result)
         else:
             self.manage_finder_scrollbox_key.configure(text="  "+list_button_format(("User ID", "Name", "Email"), "user"))
             result = self.controller.user_search(search_term, use_full_names=True)
@@ -716,7 +722,6 @@ class MainWindow:
                 new_label.configure(text=" No Results")
                 continue
 
-            print("val:", val, "\n\tlen(val):", len(val), "\n\tval[0]:", val[0])
             widget_text = " "+list_button_format(val, self.search_mode).strip(" ")
 
             if len(val) == 3:
@@ -739,7 +744,6 @@ class MainWindow:
         search box to avoid confusion"""
 
         user = self.checkout_user_dropdown.get()
-        print("dropdown user:", user)
 
         self.checkout_user_search.delete(0, "end")
         self.checkout_user_search.insert(0, user)
@@ -758,7 +762,6 @@ class MainWindow:
         time = 0.09  # time in seconds to finish flash
         for i, hex_int in enumerate(range(255, 71, -9)):
             hex_str = "#"+str(hex(hex_int)).strip("0x").zfill(2)*3
-            print(hex_str)
             self.window.after(int((time*1000)*(i/frames)), lambda h=hex_str: self.manage_search_box.configure(fg_color=h))
 
     @handle_exceptions
@@ -817,13 +820,12 @@ class MainWindow:
 
     @handle_exceptions
     def raise_home_frame(self):
-        print("try to raise")
         self.home_frame_base.tkraise()
 
     @handle_exceptions
     def db_connect(self):
         if self.controller:
-            print("this should not be here!")
+            warnings.warn("this should not be here!")
 
         try:
             with Organizer("postgres", dbname=self.db_name) as _:
@@ -831,13 +833,10 @@ class MainWindow:
                 self.postgres_exists = True
 
             # now we should be able to connect as a customer with no problem
-            print("try to connect")
             self.controller = Organizer(f"customer_{self.db_name}", dbname=self.db_name)
-            print("connected")
 
             self.connection = True
         except p2er.OperationalError as error_msg:
-            print(str(error_msg))
             self.connection = False
 
     @handle_exceptions
@@ -911,12 +910,9 @@ class MainWindow:
         a user with a checkout to the part checked out
         """
         ctk.CTkButton(itf, width=20, height=30, text="Open", command=lambda reference=ref: self.open_reference(ref=ref)).pack(side="right")
-        print("list button made")
 
     @handle_exceptions
     def open_reference(self, *_, ref):
-        print(_)
-        print("ref:", ref)
         if ref.isnumeric():
             self.raise_search("part")
         elif ref.startswith("https://"):
@@ -935,7 +931,6 @@ class MainWindow:
         """
         # get the text from the entry box
         search_term = self.checkout_user_search.get()
-        print("search term:", search_term)
 
         # the last character hasn't registered yet, so add that from the key event
         key = key_event.keysym
@@ -1436,6 +1431,11 @@ class MainWindow:
         self.part_widgets = []
 
     @handle_exceptions
+    def raise_kiosk(self):
+        """Enter kiosk mode"""
+        self.kiosk_frame.tkraise()
+
+    @handle_exceptions
     def raise_manage(self, search_type):
         """raise the page for either the user or part management page"""
 
@@ -1446,7 +1446,7 @@ class MainWindow:
         if (not self.controller) or self.controller.cursor_exists():
             self.db_connect()
 
-        # this should never be fired
+        # make sure the search mode is valid
         if search_type.lower() in ["user", "part"]:
             self.search_mode = search_type.lower()
         else:
@@ -1492,7 +1492,7 @@ class MainWindow:
 
         # search header
         if self.search_mode == "part":
-            self.search_labels.configure(text="  "+list_button_format(("Part Number", "Manufacturer", "UPC", "Date Added", "Home", "Description", "Status"), "part"), anchor="w")
+            self.search_labels.configure(text="  "+list_button_format(("Part Number", "Manufacturer", "UPC", "Date Added", "Location", "Description", "Status"), "part"), anchor="w")
             self.check_in_out_frame.pack()
         else:
             self.search_labels.configure(text="  "+list_button_format(("User ID", "Name", "Email"), "user"), anchor="w")
