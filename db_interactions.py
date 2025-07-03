@@ -222,6 +222,12 @@ class Organizer:
         self.cursor.close()
         self.conn.close()
 
+    def part_num_from_upc(self, upc):
+        search_sql = f"SELECT mfr_pn FROM parts WHERE part_upc = {upc}"
+        self.cursor.execute(search_sql)
+        result = self.cursor.fetchall()[0][0]
+        return result
+
     def select_all_db(self):
         search_sql = "SELECT datname FROM pg_database WHERE datistemplate = false;"
         self.cursor.execute(search_sql)

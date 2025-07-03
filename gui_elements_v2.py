@@ -174,9 +174,8 @@ def handle_exceptions(func):
         except Exception as er:
 
             args[0].popup_msg(str(er))
-            print("we were here...")
             print(er)
-            # raise er  # TODONE: comment this out again when you deploy (it will crash the program)
+            raise er  # TODO: comment this out again when you deploy (it will crash the program)
     return wrapper
 
 
@@ -218,6 +217,7 @@ class MainWindow:
         self.output_frames = []
         self.prompt_response = None
         self.is_fullscreen = True
+        self.previous_screen = ""
 
         # for interactions with the database
         self.controller = None
@@ -349,7 +349,7 @@ class MainWindow:
         self.checkout_user_frame.grid(row=0, column=0, sticky="news")
 
         # back button
-        ctk.CTkButton(self.checkout_user_frame, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=lambda: self.raise_search("part")).pack(fill="x", padx=40, pady=20)
+        ctk.CTkButton(self.checkout_user_frame, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=self.raise_previous).pack(fill="x", padx=40, pady=20)
 
         # explainer text
         ctk.CTkLabel(self.checkout_user_frame, text="Please select your account", font=title).pack(pady=10)
@@ -464,18 +464,29 @@ class MainWindow:
         self.kiosk_frame.grid(row=0, column=0, sticky="news")
 
         ctk.CTkLabel(self.kiosk_frame, text="Scan a part or enter a UPC code", font=title).place(relx=0.5, rely=0.12, anchor=ctk.CENTER)
-        self.kiosk_entry = ctk.CTkEntry(self.kiosk_frame, width=500, height=40)
+        self.kiosk_entry_var = ctk.StringVar()
+        self.kiosk_entry = ctk.CTkEntry(self.kiosk_frame, width=500, height=40, textvariable=self.kiosk_entry_var)
         self.kiosk_entry.place(relx=0.5, rely=0.2, anchor=ctk.CENTER)
+        self.kiosk_entry.bind("<KeyRelease>", self.kiosk_check_upc)
 
-        # the buttons that appear on kiosk mode when you enter a valid code
-        kiosk_next_step = ctk.CTkFrame(self.kiosk_frame, width=1000, height=500, fg_color="transparent")
-        kiosk_next_step.place(relx=0.5, rely=0.5, anchor=ctk.CENTER)
+        # the buttons and text that appear on kiosk mode when you enter a valid code
+        self.kiosk_message = ctk.CTkLabel(self.kiosk_frame, text="Part found: [PART NAME]", font=subtitle)
+        self.kiosk_next_step = ctk.CTkFrame(self.kiosk_frame, width=1000, height=500, fg_color="transparent")
 
         button_size = 250
 
-        for index, image_path in enumerate(("images/Check_Out.png", "images/Return.png")):
+        for col_num, image_path, command in (
+                (0, "images/Check_Out.png", self.checkout_continue),
+                (1, "images/Return.png", self.checkin_continue)
+        ):
             image = ctk.CTkImage(Image.open(image_path), size=(button_size, button_size))
-            ctk.CTkButton(kiosk_next_step, image=image, text="", corner_radius=100).grid(row=0, column=index*2, padx=50)
+            hover_image = ctk.CTkImage(Image.open(image_path[:-4]+"_hover"+image_path[-4:]), size=(button_size, button_size))
+
+            image_button = ctk.CTkButton(self.kiosk_next_step, image=image, text="", corner_radius=100, command=command)
+            image_button.grid(row=0, column=col_num, padx=50)
+
+            for event, new_image in (("<Enter>", hover_image), ("<Leave>", image)):
+                image_button.bind(event, lambda _=_, btn=image_button, img=new_image: btn.configure(image=img))
 
         #######################
         # add new part form
@@ -703,6 +714,48 @@ class MainWindow:
         self.window.attributes('-fullscreen', self.is_fullscreen)
 
     def minimize(self): self.window.wm_state("iconic")
+
+    def print_hello_world(self, *args, **kwargs):
+        """Test function: prints \"Hello World!\" along with all args and kwargs"""
+        print("Hello world!")
+        print("\tself:", self)
+        print("\t*args:", args)
+        print("\t**kwargs:", kwargs)
+
+    def kiosk_check_upc(self, *_):
+        """Make sure that the upc is 12 numeric characters"""
+
+        raw_string = self.kiosk_entry_var.get()
+        good_string = ""
+        print(raw_string)
+
+        for char in raw_string:
+            if char.isnumeric():
+                good_string += char
+
+        self.kiosk_entry_var.set(good_string)
+        if not good_string: return
+
+        if self.controller.upc_exists(good_string):
+            self.selected_part_key = good_string
+            self.kiosk_next_step.place(relx=0.5, rely=0.5, anchor=ctk.CENTER)
+            self.kiosk_message.place(relx=0.5, rely=0.3, anchor=ctk.CENTER)
+
+            part_num = self.controller.part_num_from_upc(good_string)
+            self.kiosk_message.configure(text="Part found: "+part_num)
+        else:
+            self.kiosk_next_step.place_forget()
+            self.kiosk_message.place_forget()
+
+    def raise_previous(self):
+        print("we were here")
+        if self.previous_screen == "user" or self.previous_screen == "part":
+            self.raise_search(self.previous_screen)
+        elif self.previous_screen == "kiosk":
+            self.raise_kiosk()
+        else:
+            warnings.warn("Invalid previous!")
+
 
     @handle_exceptions
     def manage_finder_update(self, *_):
@@ -1027,7 +1080,7 @@ class MainWindow:
         new_form.grid(row=0, column=0, sticky="news")
 
         # back button
-        ctk.CTkButton(new_form, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=lambda: self.raise_manage(search_mode)).pack(fill="x", padx=40, pady=20)
+        ctk.CTkButton(new_form, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=lambda s=search_mode: self.raise_manage(s)).pack(fill="x", padx=40, pady=20)
 
         # main question fields
         for question, fields in questions_dict.items():
@@ -1444,8 +1497,16 @@ class MainWindow:
     @handle_exceptions
     def raise_kiosk(self):
         """Enter kiosk mode"""
+
+        # clear old entry info
+        self.kiosk_entry_var.set("")
+        self.kiosk_check_upc()
+        self.kiosk_next_step.place_forget()
+        self.kiosk_message.place_forget()
+
         self.kiosk_frame.tkraise()
         self.kiosk_entry.focus()
+        self.previous_screen = "kiosk"
 
     @handle_exceptions
     def raise_manage(self, search_type):
@@ -1487,6 +1548,8 @@ class MainWindow:
     @handle_exceptions
     def raise_search(self, search_type):
         """clear the search box and raise either 'part search' or 'user search' depending on the search_type"""
+
+        self.previous_screen = search_type
 
         # clear the selected part key, as no part is selected
         self.selected_part_key = None
