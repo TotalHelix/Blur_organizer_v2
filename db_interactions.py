@@ -1336,7 +1336,9 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
 
     # users
     def user_search(self, search_term, columns=None, use_full_names=False):
-        """get the matching user ids to a search term"""
+        """get the matching user ids to a search term
+        :returns a dict {user_id: First Name, Last Name, Email} if use_full_names is True.
+            otherwise it returns a list of user ids"""
         if not columns:
             columns = {
                 "user_id": True,

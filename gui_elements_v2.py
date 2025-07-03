@@ -351,29 +351,32 @@ class MainWindow:
         # back button
         ctk.CTkButton(self.checkout_user_frame, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=self.raise_previous).pack(fill="x", padx=40, pady=20)
 
-        # explainer text
+        # title text
         ctk.CTkLabel(self.checkout_user_frame, text="Please select your account", font=title).pack(pady=10)
 
-        # frame for the search box and dropdown
-        long_frame = ctk.CTkFrame(self.checkout_user_frame, fg_color="transparent")
-        long_frame.pack(pady=15)
+        # Search Box
 
         # search box in the user select frame
         self.reverse_users = {}
-        self.checkout_user_search = ctk.CTkEntry(long_frame, placeholder_text="Search", width=200)
-        self.checkout_user_search.pack(side="left")
-        self.checkout_user_search.bind("<Key>", self.update_user_select_options)
+        checkout_width = 400
+        self.checkout_user_search = ctk.CTkEntry(self.checkout_user_frame, placeholder_text="Search", width=checkout_width, height=35)
+        self.checkout_user_search.pack(pady=15)
+        self.checkout_user_search.bind("<KeyRelease>", self.checkout_update_search)
 
-        # dropdown of users to pick from
-        self.checkout_selected_user = tk.StringVar(value=" ")
-        self.checkout_user_dropdown = ctk.CTkOptionMenu(long_frame, values=[" "], variable=self.checkout_selected_user, command=self.fill_dropdown)
-        self.checkout_user_dropdown.pack(side="left")
+        # scrolling frame of users to pick from
+        self.checkout_search_options = []
+        self.checkout_scrolling_frame = ctk.CTkScrollableFrame(self.checkout_user_frame, width=checkout_width, height=500)
+        self.checkout_scrolling_frame.pack()
 
-        ctk.CTkLabel(self.checkout_user_frame, text="If you don't see your account, you can create a new one under the Manage Users tab.").pack()
+        # Create new user button
+        ctk.CTkButton(self.checkout_user_frame, text="+ Create User", font=subtitle).pack(pady=15)
+
+        # seperator
+        ctk.CTkLabel(self.checkout_user_frame, text="_"*46, fg_color="transparent", font=subtitle, text_color="grey").pack()
 
         # check out button (not a trick like the 'go' button)
-        self.checkout_finalize_button = ctk.CTkButton(self.checkout_user_frame, text="Check Out", command=self.checkout_finalize)
-        self.checkout_finalize_button.pack(pady=20)
+        self.checkout_finalize_button = ctk.CTkButton(self.checkout_user_frame, text="Check Out", command=self.checkout_finalize, font=subtitle, width=180, height=40)
+        self.checkout_finalize_button.pack(pady=30)
 
         # prompt for force checkout
         self.force_prompt = ctk.CTkFrame(self.checkout_user_frame)
@@ -493,7 +496,7 @@ class MainWindow:
         #######################
         self.part_questions = {  # "field": (max length, required)
             "Manufacturer": (26, True),
-            "Manufacturer's part number": (26, False),
+            "Part number": (26, False),
             "Placement location": (255, True),
             "Description": (0, True),
             "Link to original part": (0, False)
@@ -708,6 +711,25 @@ class MainWindow:
         finally:
             self.window.attributes('-fullscreen', True)
             # self.window.state("zoomed")
+
+    def checkout_update_search(self, *_):
+        """update the data in the checkout user search box."""
+        search_text = self.checkout_user_search.get()
+
+        # clear the old list
+        for thing in self.checkout_search_options:
+            thing.pack_forget()
+
+        self.checkout_search_options = []
+
+        users = self.controller.user_search(search_text, use_full_names=True)
+        print(users)
+        for user_id, values in users.items():
+            _, name, _ = values
+            button_text = name
+            new_button = ctk.CTkButton(self.checkout_scrolling_frame, text=button_text, width=400, height=40, fg_color="transparent")
+            new_button.pack()
+            self.checkout_search_options.append(new_button)
 
     def fullscreen(self):
         self.is_fullscreen = not self.is_fullscreen
@@ -1385,7 +1407,6 @@ class MainWindow:
             postgres.drop_db(self.db_name)
         self.popup_msg("Database dropped successfully", "success")
 
-
     @handle_exceptions
     def format_database(self):
         """delete the database and remake everything"""
@@ -1478,11 +1499,11 @@ class MainWindow:
             return
 
         # clear out whatever old stuff might be in this or the next panel
+        self.checkout_update_search()
         self.force_prompt.pack_forget()
         self.checkout_user_search.delete("0", "end")
         self.checkout_upc = self.checkout_barcode.get()
         self.checkout_barcode.delete("0", "end")
-        self.checkout_selected_user.set(" ")
 
         # move on to the user selection page
         self.checkout_user_frame.tkraise()
