@@ -825,16 +825,6 @@ class MainWindow:
             new_label.bind("<Button-1>", lambda event=_, u=identifier: self.manage_finder_select(event, upc=u))
 
     @handle_exceptions
-    def fill_dropdown(self, *_):
-        """when the user selects their account when checking out a part, go ahead and fill that information into the
-        search box to avoid confusion"""
-
-        user = self.checkout_user_dropdown.get()
-
-        self.checkout_user_search.delete(0, "end")
-        self.checkout_user_search.insert(0, user)
-
-    @handle_exceptions
     def raise_and_select(self):
         self.raise_search(self.search_mode)
         self.window.after(20, self.list_button_select)
@@ -1034,16 +1024,10 @@ class MainWindow:
         print("names list:", names_list)
         if not names_list or names_list == [" "]: names_list = ["No Users Found"]
 
-        # update the search accordingly
-        self.checkout_user_dropdown.configure(values=names_list)
-        self.checkout_selected_user.set(names_list[0])
-
     @handle_exceptions
     def checkout_finalize(self, force=False):
         """take the upc and user id and check out the part."""
         print("checkout called")
-
-        user = self.checkout_selected_user.get()
         self.reverse_users = {" ".join(key[1:2]) if isinstance(key, tuple) else key: val for key, val in self.reverse_users.items()}
 
         print("reverse users:")
