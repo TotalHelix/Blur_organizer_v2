@@ -11,6 +11,7 @@ from db_interactions import Organizer
 import psycopg2.errors as p2er
 from re import compile, split as re_split
 from webbrowser import open as web_open
+from CTkMessagebox import CTkMessagebox
 
 # theme stuff; colors and fonts
 ctk.set_appearance_mode("dark")
@@ -175,7 +176,7 @@ def handle_exceptions(func):
 
             args[0].popup_msg(str(er))
             print(er)
-            raise er  # TODO: comment this out again when you deploy (it will crash the program)
+            raise er  # TODO: comment this out again when you deploy (it will crash the program (i think))
     return wrapper
 
 
@@ -218,6 +219,7 @@ class MainWindow:
         self.prompt_response = None
         self.is_fullscreen = True
         self.previous_screen = ""
+        self.checkout_user = ""
 
         # for interactions with the database
         self.controller = None
@@ -374,8 +376,12 @@ class MainWindow:
         # seperator
         ctk.CTkLabel(self.checkout_user_frame, text="_"*46, fg_color="transparent", font=subtitle, text_color="grey").pack()
 
+        # "Check out as Reuben Tart?" message
+        self.checkout_message = ctk.CTkLabel(self.checkout_user_frame, text=" ", font=subtitle)
+        self.checkout_message.pack()
+
         # check out button (not a trick like the 'go' button)
-        self.checkout_finalize_button = ctk.CTkButton(self.checkout_user_frame, text="Check Out", command=self.checkout_finalize, font=subtitle, width=180, height=40)
+        self.checkout_finalize_button = ctk.CTkButton(self.checkout_user_frame, text="Check Out", command=self.checkout_finalize, font=subtitle, width=180, height=40, **button_disable)
         self.checkout_finalize_button.pack(pady=30)
 
         # prompt for force checkout
@@ -719,17 +725,35 @@ class MainWindow:
         # clear the old list
         for thing in self.checkout_search_options:
             thing.pack_forget()
-
         self.checkout_search_options = []
 
+        # scroll back to the top of the frame
+        self.checkout_scrolling_frame.parent_canvas.yview_moveto(0)
+
+        # make a button for each result
         users = self.controller.user_search(search_text, use_full_names=True)
-        print(users)
         for user_id, values in users.items():
-            _, name, _ = values
-            button_text = name
-            new_button = ctk.CTkButton(self.checkout_scrolling_frame, text=button_text, width=400, height=40, fg_color="transparent")
+            # decide what to put on the button
+            if values[0] == "No Results": button_text = "No Results"
+            else: button_text = values[1]
+
+            # make the button
+            new_button = ctk.CTkButton(self.checkout_scrolling_frame, text=button_text, width=400, height=40, fg_color="transparent", command=lambda n=values[0]: self.checkout_user_select(n))
             new_button.pack()
             self.checkout_search_options.append(new_button)
+
+    def checkout_user_select(self, user_name):
+        """select the user in the checkout user select frame with the specified username"""
+        print(f"called with name \"{user_name}\"")
+
+        users_dict = self.controller.user_search(user_name, use_full_names=True)
+        display_name = " ".join(list(users_dict.values())[0][1:2])
+
+        print(f"\tthis results in full name \"{display_name}\"")
+
+        self.checkout_user = user_name
+        self.checkout_finalize_button.configure(**button_enable)
+        self.checkout_message.configure(text=f"Check out as {display_name}?")
 
     def fullscreen(self):
         self.is_fullscreen = not self.is_fullscreen
@@ -749,7 +773,6 @@ class MainWindow:
 
         raw_string = self.kiosk_entry_var.get()
         good_string = ""
-        print(raw_string)
 
         for char in raw_string:
             if char.isnumeric():
@@ -1035,26 +1058,28 @@ class MainWindow:
             print("\tkey:", key)
             print("\tvalue:", val)
 
-        if user not in self.reverse_users.keys() or user.lower() == "no user found":
+        if not self.controller.userid_exists(self.checkout_user):
             self.popup_msg("please select a valid user.")
             return
 
-        uid = self.reverse_users[user]
         upc = self.selected_part_key
-        print("upc:", upc, "uid:", uid, "force:", force)
+        print("upc:", upc, "uid:", self.checkout_user, "force:", force)
 
-        result = self.controller.part_checkout(upc, uid, force)
+        result = self.controller.part_checkout(upc, self.checkout_user, force)
 
         if result == "-CHECKOUT_SUCCESS-":
             self.popup_msg("Part checked out successfully", "success")
             tmp_key = self.selected_part_key
-            self.raise_search("part")
+            if self.previous_screen == "part":
+                # if the user was on the part search frame when they checked out
+                self.raise_search("part")
+                def reselect(): self.list_button_select(database_key=tmp_key)
 
-            print("reselect with", tmp_key)
-            def reselect(): self.list_button_select(database_key=tmp_key)
+                self.window.after(10, reselect)
+            else:
+                # if the user was on the kiosk screen when they checked out
+                self.raise_kiosk()
 
-            self.window.after(10, reselect)
-            print("tried to reselect")
         else:
             # if the part is already checked out by someone else
 
@@ -1066,10 +1091,17 @@ class MainWindow:
                 raise Exception("Something went wrong on our end. Try returning the part and returning to checkout.")
 
             # tell the user that the part is already checked out, and ask if he/she wants to force checkout
-            self.prompt_text.configure(text=f"This part is already checked out by {split_result[1]}. Check out anyways?")
-            self.force_prompt.pack(pady=20)
+            popup = CTkMessagebox(
+                title="Are you sure?",
+                message=f"This part is already checked out by {split_result[1]}. Check out anyways?",
+                options=["Yes", "Cancel"],
+                icon="warning"
+            )
 
-            print("prompe res:", self.prompt_response)
+            if popup.get() == "Yes":
+                self.checkout_finalize(force=True)
+
+            print("prompt res:", self.prompt_response)
 
     @handle_exceptions
     def make_new_form(self, search_mode):

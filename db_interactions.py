@@ -222,6 +222,13 @@ class Organizer:
         self.cursor.close()
         self.conn.close()
 
+    def userid_exists(self, userid):
+        """check if the userid specified exists in the database"""
+        search_sql = f"SELECT user_id FROM users WHERE user_id = '{userid}'"
+        self.cursor.execute(search_sql)
+        if self.cursor.fetchall()[0][0] == userid: return True
+        else: return False
+
     def part_num_from_upc(self, upc):
         search_sql = f"SELECT mfr_pn FROM parts WHERE part_upc = {upc}"
         self.cursor.execute(search_sql)
@@ -1339,6 +1346,8 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
         """get the matching user ids to a search term
         :returns a dict {user_id: First Name, Last Name, Email} if use_full_names is True.
             otherwise it returns a list of user ids"""
+
+        # NOTE: the columns argument is WHERE to look for matches, NOT what columns to return.
         if not columns:
             columns = {
                 "user_id": True,
@@ -1354,14 +1363,14 @@ SELECT user_id, first_name, last_name, email FROM users
         results_table = self.search_general(search_sql, search_term, columns, raw_table=True)
 
         if (not results_table) or (not results_table[0]):
-            return {"No Results": ("No Results", *(" " for _ in range(3)))}
+            return {"No Results": ("No Results", *(" " for _ in range(2)))}
 
         print(results_table[0])
         print(len(results_table[0]))
         if len(results_table[0]) > 2:
             results_dict = {row[0]: (row[0], " ".join(row[1:3]), row[3]) for row in results_table}
         else:
-            results_dict = {"No Results": ("No Results", *(" " for _ in range(3)))}
+            results_dict = {"No Results": ("No Results", *(" " for _ in range(2)))}
 
         if list(results_dict.keys())[0] == " ":
             return {"No matching items": "No matching items"}

@@ -1,6 +1,5 @@
 import json
-from CTkMessagebox import CTkMessagebox
-from gui_elements_v2 import MainWindow, ctk, Organizer
+from gui_elements_v2 import MainWindow, ctk, Organizer, CTkMessagebox
 import os
 import lorem
 
