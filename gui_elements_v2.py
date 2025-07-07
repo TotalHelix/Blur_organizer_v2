@@ -220,6 +220,7 @@ class MainWindow:
         self.is_fullscreen = True
         self.previous_screen = ""
         self.checkout_user = ""
+        self.back_to_checkout = True
 
         # for interactions with the database
         self.controller = None
@@ -371,7 +372,7 @@ class MainWindow:
         self.checkout_scrolling_frame.pack()
 
         # Create new user button
-        ctk.CTkButton(self.checkout_user_frame, text="+ Create User", font=subtitle).pack(pady=15)
+        ctk.CTkButton(self.checkout_user_frame, text="+ Create User", font=subtitle, command=self.create_user).pack(pady=15)
 
         # seperator
         ctk.CTkLabel(self.checkout_user_frame, text="_"*46, fg_color="transparent", font=subtitle, text_color="grey").pack()
@@ -602,8 +603,8 @@ class MainWindow:
 
         # or add a part
         ctk.CTkLabel(self.manage_parts_frame, text="or", font=subtitle).pack(pady=20)
-        self.add_part = ctk.CTkButton(self.manage_parts_frame, text="+ Add a part", command=self.add_part, height=32)
-        self.add_part.pack()
+        self.add_part_button = ctk.CTkButton(self.manage_parts_frame, text="+ Add a part", command=self.add_part, height=32)
+        self.add_part_button.pack()
 
         #####################
         # Home / README
@@ -717,6 +718,11 @@ class MainWindow:
         finally:
             self.window.attributes('-fullscreen', True)
             # self.window.state("zoomed")
+
+    def create_user(self):
+        self.search_mode = "user"
+        self.back_to_checkout = True
+        self.add_part()
 
     def checkout_update_search(self, *_):
         """update the data in the checkout user search box."""
@@ -1287,7 +1293,7 @@ class MainWindow:
             print("trying to add a part")
             try:
                 if self.search_mode == "part":
-                    result = self.controller.add_part(fields[3], *fields[:3], *fields[4:])
+                    result = self.controller.add_part_button(fields[3], *fields[:3], *fields[4:])
                     # self.print_label(result)
                 else:
                     result = self.controller.add_user(*fields)
@@ -1349,6 +1355,7 @@ class MainWindow:
         self.raise_manage(self.search_mode)
         self.manage_search_box.configure(f"No {self.search_mode} Selected")
         self.manage_finder_update()
+        if self.back_to_checkout: self.checkout_continue(auto_select=result)
         # self.list_button_select(database_key=result)
 
     @handle_exceptions
@@ -1497,7 +1504,7 @@ class MainWindow:
         self.window.after(20, self.list_button_select)
 
     @handle_exceptions
-    def checkout_continue(self, *_):
+    def checkout_continue(self, *_, auto_select=None):
         """check out a part. Was originally the second step after scanning the part code"""
 
         # if a part is not selected, you can't check out
@@ -1520,6 +1527,8 @@ class MainWindow:
         self.checkout_user_search.delete("0", "end")
         self.checkout_upc = self.checkout_barcode.get()
         self.checkout_barcode.delete("0", "end")
+
+        if auto_select: self.checkout_user_select(auto_select)
 
         # move on to the user selection page
         self.checkout_user_frame.tkraise()
@@ -1565,7 +1574,7 @@ class MainWindow:
         # change text of some elements
         id_type = "the User ID" if self.search_mode == "user" else "or scan the UPC"
         self.manage_subtitle.configure(text=f"Enter {id_type} of the {self.search_mode} that you would like to configure, or click \"Add\"")
-        self.add_part.configure(text=f"+ Add a {self.search_mode.title()}")  # add a [part/user] button
+        self.add_part_button.configure(text=f"+ Add a {self.search_mode.title()}")  # add a [part/user] button
 
         # show/hide the print button
         if search_type == "user":
