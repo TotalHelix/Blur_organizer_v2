@@ -512,7 +512,7 @@ class MainWindow:
         self.user_questions = {
             "First name": (50, True),
             "Last name": (50, True),
-            "Email": (255, True)
+            "Email": (255, False)
         }
 
         self.add_part_entries = {}
@@ -1130,10 +1130,10 @@ class MainWindow:
         for question, fields in questions_dict.items():
             # separate the fields
             length, required = fields
-            ending = "" if required else " (optional)"
+            start = "" if required else "(Optional) "
 
             # make a description text
-            ctk.CTkLabel(new_form, text="\n"+question+ending, font=("Ariel", 16)).pack()
+            ctk.CTkLabel(new_form, text="\n"+start+question, font=("Ariel", 16)).pack()
 
             # make a new entry box with the key
             validate_cmd = new_form.register(lambda e, l=length: max_length_validate(e, l))

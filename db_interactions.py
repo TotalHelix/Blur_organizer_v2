@@ -326,7 +326,7 @@ class Organizer:
                     ["user_id", "varchar", "53", True, None, "NOT NULL"],
                     ["first_name", "varchar", "50", False, None, "NOT NULL"],
                     ["last_name", "varchar", "50", False, None, "NOT NULL"],
-                    ["email", "varchar", "255", False, None, "NOT NULL"]
+                    ["email", "varchar", "255", False, None, ""]
                 ],
 
             "manufacturers":
