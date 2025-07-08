@@ -7,7 +7,7 @@ import customtkinter as ctk
 from sys import exit
 import requests
 from PIL import ImageFont, Image
-from db_interactions import Organizer
+from db_interactions import Organizer, get_location
 import psycopg2.errors as p2er
 from re import compile, split as re_split
 from webbrowser import open as web_open
@@ -73,7 +73,7 @@ def list_button_format(text, search_mode):
         raise("list_button_format requires a tuple argument, but received", type(text))
 
     if search_mode == "part":
-        final_string = ""  # text[6] + "  "
+        final_string = ""
         text = [text[6], *text[:6]]
         print(text)
         lengths = [24, 21, 16, 14, 12, 16, 34]
@@ -113,27 +113,9 @@ def make_box(itf, v, tall=False):
     value_box.pack(side="right", padx=10, pady=7)
 
 
-def validate_upc(new_value):
-    """Check if the new value contains only digits and is not longer than 12 characters"""
-    if new_value.isdigit() and len(new_value) <= 12:
-        return True
-    elif new_value == "":
-        # Allow empty entry
-        return True
-    else:
-        return False
-
-
 def margin(master):
     """a margin that you should add to the top of each frame"""
     ctk.CTkLabel(master, text=" ", font=("Ariel", 1)).pack()
-
-
-def textbox_write(textbox, text):
-    textbox.configure(state="normal")
-    textbox.delete("0.0", "end")
-    textbox.insert("0.0", text)
-    textbox.configure(state="disabled")
 
 
 def stackable_frame(master, text, desc, button_text, command):
@@ -183,12 +165,7 @@ def handle_exceptions(func):
 class ButtonWithVar(ctk.CTkButton):
     def __init__(self, master, var_value, **kwargs):
         self.button = super().__init__(master, **kwargs)
-        print("master:", str(master))
-        print("**kwargs:", str(kwargs))
-        print("self.button:", str(self.button))
-        print("var_value:", str(var_value))
         self.var = tk.StringVar(self.button, value=var_value)
-        print("self.var:", str(self.var))
 
     def get_var(self):
         return self.var.get()
@@ -197,6 +174,7 @@ class ButtonWithVar(ctk.CTkButton):
 class MainWindow:
     """The whole window that does all of everything"""
     def __init__(self, db_name):
+        get_location()
 
         # database credentials
         self.db_name = db_name
@@ -238,7 +216,7 @@ class MainWindow:
             "User Search": lambda: self.raise_search("user"),
             "Manage Parts": lambda: self.raise_manage("part"),
             "Manage Users": lambda: self.raise_manage("user"),
-            "Kiosk Mode": lambda : self.raise_kiosk()
+            "Kiosk Mode": lambda: self.raise_kiosk()
         }
         for button_name, cmd in side_buttons.items():
             button = ctk.CTkButton(l_col, text=button_name, command=cmd)
@@ -267,83 +245,6 @@ class MainWindow:
         ##########################################
         # different frames
         ##########################################
-
-        ###################
-        # checkin
-        ###################
-        self.checkin_frame = ctk.CTkFrame(self.workspace)
-        self.checkin_frame.grid(row=0, column=0, sticky="news")
-
-        margin(self.checkin_frame)
-
-        # Title Label
-        title_label = ctk.CTkLabel(self.checkin_frame, text="Return a part", font=title)
-        title_label.pack(pady=10)
-
-        # Explanation Text
-        explanation_text = ctk.CTkLabel(self.checkin_frame, text="Please scan a barcode or manually enter digits of the part you would like to return:", font=subtitle)
-        explanation_text.pack(pady=10)
-
-        # Register the validation function
-        validate_command = self.checkin_frame.register(validate_upc)
-
-        # Frame for Entry Field and Button
-        input_frame = ctk.CTkFrame(self.checkin_frame)
-        input_frame.pack(pady=10, padx=40, fill="x")
-
-        # Entry Field for Barcode Scanning or Manual Input
-        self.checkin_barcode = ctk.CTkEntry(
-            input_frame,
-            placeholder_text="Scan barcode or enter digits here",
-            validate="key",
-            validatecommand=(validate_command, '%P')
-        )
-        self.checkin_barcode.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        self.checkin_barcode.bind("<Return>", self.checkin_continue)
-
-        # Go Button
-        checkin_finalize = ctk.CTkButton(input_frame, text="Go", command=self.checkin_continue)
-        checkin_finalize.pack(side="left")
-
-        ###################
-        # checkout
-        ###################
-        self.checkout_frame = ctk.CTkFrame(self.workspace)
-        self.checkout_frame.grid(row=0, column=0, sticky="news")
-
-        margin(self.checkout_frame)
-
-        # Title Label
-        title_label = ctk.CTkLabel(self.checkout_frame, text="Check out a part", font=title)
-        title_label.pack(pady=10)
-
-        # Explanation Text
-        explanation_text = ctk.CTkLabel(self.checkout_frame, text="Please scan a barcode or manually enter UPC of the part you would like to check out:", font=("Ariel", 18))
-        explanation_text.pack(pady=10)
-
-        # Register the validation function
-        validate_command = self.checkout_frame.register(validate_upc)
-
-        # Frame for Entry Field and Button
-        input_frame = ctk.CTkFrame(self.checkout_frame)
-        input_frame.pack(pady=10, padx=40, fill="x")
-
-        # back button
-        ctk.CTkButton(input_frame, fg_color="transparent", hover_color=None, text="⇽ Back", anchor="w", hover=False, command=lambda: self.raise_manage("part")).pack(fill="x", padx=40, pady=20)
-
-        # Entry Field for Barcode Scanning or Manual Input
-        self.checkout_barcode = ctk.CTkEntry(
-            input_frame,
-            placeholder_text="Scan barcode or enter digits here",
-            validate="key",
-            validatecommand=(validate_command, '%P')
-        )
-        self.checkout_barcode.pack(side="left", fill="x", expand=True, padx=(0, 10))
-        self.checkout_barcode.bind("<Return>", self.checkout_continue)
-
-        # Go Button
-        checkout_continue = ctk.CTkButton(input_frame, text="Continue", command=self.checkout_continue)
-        checkout_continue.pack(side="left")
 
         #################
         # checkout continue (user select)
@@ -406,7 +307,7 @@ class MainWindow:
             ("Format Database", "Resets the database with all default tables", "Format", self.format_database),
             ("Populate Database", "Fills the database up with random data. Useful for testing", "Populate", self.populate_database),
             ("Drop Database", "Completely delete the database. This window might no longer function as expected until the database is reformatted.", "Drop", self.drop_db),
-            ("Change Location", "Change where this machine thinks that it is. Returned parts will show as being in the new location.", self.change_locatoin)
+            ("Change Location", "Change where this machine thinks that it is. Returned parts will show as being in the new location.", "Change", self.change_location)
         ]
 
         for args in data:
@@ -504,9 +405,10 @@ class MainWindow:
         #######################
         self.part_questions = {  # "field": (max length, required)
             "Manufacturer": (26, True),
-            "Part number": (26, False),
-            "Placement location": (255, True),
-            "Description": (0, True),
+            "Part number": (26, True),
+            # "Placement location": (255, True),
+            # previously the placement location wasn't the kiosk location, but a storage closet identification number.
+            "Description": (0, False),
             "Link to original part": (0, False)
         }
 
@@ -811,7 +713,6 @@ class MainWindow:
         else:
             warnings.warn("Invalid previous!")
 
-
     @handle_exceptions
     def manage_finder_update(self, *_):
         """Updates the search results for the search panel in the manage parts frame. Works the same as update_search"""
@@ -1033,31 +934,6 @@ class MainWindow:
         self.list_button_select(database_key=ref)
 
     @handle_exceptions
-    def update_user_select_options(self, key_event):
-        """
-        in the checkout frame, get the info from the entry box
-        and use it to search for users, and then add them to the dropdown
-        """
-        # get the text from the entry box
-        search_term = self.checkout_user_search.get()
-
-        # the last character hasn't registered yet, so add that from the key event
-        key = key_event.keysym
-        print("key:", key)
-        if len(key) == 1: search_term += key
-        if key == "BackSpace": search_term = search_term[:-1]
-        print("new search term:", search_term)
-
-        # search for the matching users
-        users = self.controller.user_search(search_term, use_full_names=True, columns={"first_name": True, "last_name": True})
-        self.reverse_users = {data: uid for uid, data in users.items()}
-        names_list = list(self.reverse_users.keys())
-        names_list = [item[1] for item in names_list]
-
-        print("names list:", names_list)
-        if not names_list or names_list == [" "]: names_list = ["No Users Found"]
-
-    @handle_exceptions
     def checkout_finalize(self, force=False):
         """take the upc and user id and check out the part."""
         print("checkout called")
@@ -1118,6 +994,7 @@ class MainWindow:
         """makes a new form from a question dictionary"""
 
         if search_mode == "part":
+            # entries_string_variable is a dictionary that links
             entries_storing_variable = self.add_part_entries
             questions_dict = self.part_questions
         else:
@@ -1284,6 +1161,7 @@ class MainWindow:
 
         i = 0
         for field in fields:
+            # if a required field is left empty
             if field == "" and reference_list[i][1]:
                 self.popup_msg("You have empty fields!")
                 return
@@ -1298,7 +1176,6 @@ class MainWindow:
             try:
                 if self.search_mode == "part":
                     result = self.controller.add_part_button(fields[3], *fields[:3], *fields[4:])
-                    # self.print_label(result)
                 else:
                     result = self.controller.add_user(*fields)
 
@@ -1491,7 +1368,7 @@ class MainWindow:
             print("user picked no")
             return
 
-        self.raise_kiosk()
+        if self.previous_screen == "kiosk": self.raise_kiosk()
 
         # database checkin
         upc = self.selected_part_key  # self.checkin_barcode.get()
@@ -1619,7 +1496,7 @@ class MainWindow:
 
         # search header
         if self.search_mode == "part":
-            self.search_labels.configure(text="  "+list_button_format(("Part Number", "Manufacturer", "UPC", "Date Added", "Location", "Description", "Status"), "part"), anchor="w")
+            self.search_labels.configure(text="  "+list_button_format(("Part Number", "Manufacturer", "UPC", "Date Added", "Last Location", "Description", "Status"), "part"), anchor="w")
             self.check_in_out_frame.pack()
         else:
             self.search_labels.configure(text="  "+list_button_format(("User ID", "Name", "Email"), "user"), anchor="w")
@@ -1701,18 +1578,6 @@ class MainWindow:
         self.output_frames.clear()
 
     @handle_exceptions
-    def raise_checkout(self):
-        self.checkout_barcode.focus_set()
-        self.checkout_barcode.select_range(0, "end")
-        self.checkout_frame.tkraise()
-
-    @handle_exceptions
-    def raise_checkin(self):
-        self.checkin_barcode.focus_set()
-        self.checkin_barcode.select_range(0, "end")
-        self.checkin_frame.tkraise()
-
-    @handle_exceptions
     def list_button_select(self, button_index=None, database_key=None):
         """select the targeted part and update the results accordingly"""
         if not database_key:
@@ -1728,7 +1593,7 @@ class MainWindow:
 
         try:
             button = self.part_widgets[button_index]
-        except:     # who knows what could happen with this one
+        except Exception:     # who knows what could happen with this one
             return
 
         if database_key.lower() == "no matching items": return

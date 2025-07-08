@@ -14,7 +14,7 @@ global selector_window
 global options_menu
 
 # json of remembered databases
-json_location = os.getenv("APPDATA") + "\\Blur_Part_Organizer\\"
+json_location = os.getenv("APPDATA") + "\\Blur_Part_Organizer\\"  # if you're changing this remember to change the one in db_interactions.py as well.
 json_file_name = "saved_databases.json"
 json_path = json_location+json_file_name
 if os.path.exists(json_path):

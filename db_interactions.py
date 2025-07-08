@@ -2,9 +2,6 @@
 import os
 import random
 import pywintypes
-from barcode.writer import ImageWriter
-from barcode import UPCA
-from PIL import Image
 from textwrap import wrap
 from zpl import Label
 from zebra import Zebra
@@ -14,11 +11,35 @@ from psycopg2 import connect
 import psycopg2.errors
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from datetime import date, datetime
+from socket import gethostname
 
 # random generation (populate database)
 import lorem
 from random import randint, choice
 from names import get_first_name, get_last_name
+
+
+file_location = os.getenv("APPDATA") + "\\Blur_Part_Organizer\\"
+kiosk_location_name_file = "kiosk_name.txt"
+kiosk_path = file_location + kiosk_location_name_file
+
+
+def get_location():
+    """return the name that will show up as the location when a part is checked out from this device
+    If no location file exists the current hostname is set as the new locatoin. This can be changed in Danger Zone."""
+    try:
+        with open(kiosk_path, "r") as kiosk:
+            return kiosk.read()[:-1]
+    except FileNotFoundError:
+        new_name = gethostname()
+        set_location(new_name)
+        return new_name
+
+
+def set_location(new_name):
+    """Set a new name to appear when parts are checked out from this device"""
+    with open(kiosk_path, "w") as kiosk:
+        kiosk.write(new_name)
 
 
 def find_common_elements(list_to_compare):
@@ -33,38 +54,6 @@ def find_common_elements(list_to_compare):
         common_elements.intersection_update(lst)
 
     return list(common_elements)
-
-
-def upc_new(upc_code):
-    """generate a simple barcode upc"""
-
-    # generate the barcode object
-    # the code should already be a string but just in case
-    my_code = UPCA(str(upc_code), writer=ImageWriter())
-    my_code.save("tmp_code")
-
-    # resize the barcode
-    code_img = Image.open("tmp_code.png")
-    # code_img.thumbnail((57, 25))
-
-    canvas_scale = 30
-    offset_scale = 5
-
-    # add padding to top and left
-    new_img = Image.new("RGB", (57*canvas_scale, 25*canvas_scale), "white")
-
-    # Paste the original image onto the new image, offset by the left and top space
-    new_img.paste(code_img, (57*offset_scale, 25*offset_scale+50))
-
-    # Optionally, show the new image
-    new_img.show()
-    code_img.save("tmp_code.png")
-
-    # print
-    os.system("mspaint /PT ./tmp_code.png")  # for some reason the only way to automate printing with zebra is to tell microsoft paint to send the printer something ¯\_(ツ)_/¯
-
-    # delete the barcode
-    os.remove("tmp_code.png")
 
 
 def render_upc(code, placement, desc_text, printer="Zebra "):
@@ -222,11 +211,6 @@ class Organizer:
         self.cursor.close()
         self.conn.close()
 
-    def pn_from_upc(self, upc):
-        """take the upc and return the matching part number"""
-        self.cursor.execute(f"SELECT mfr_pn FROM parts WHERE part_upc = {upc};")
-        return self.cursor.fetchall()[0][0]
-
     def userid_exists(self, userid):
         """check if the userid specified exists in the database"""
         search_sql = f"SELECT user_id FROM users WHERE user_id = '{userid}'"
@@ -258,13 +242,6 @@ class Organizer:
             return result[0][0]
         else:
             return ["No matching items"]
-
-    def name_from_user_id(self, user_id):
-        search_sql = f"SELECT first_name, last_name FROM users WHERE user_id = '{user_id}'"
-        self.cursor.execute(search_sql)
-        results = self.cursor.fetchall()
-
-        return results[0] if results else None
 
     def upc_exists(self, upc):
         """check a upc to see if it exists in the database"""
@@ -349,7 +326,7 @@ class Organizer:
                     ["part_placement",      "varchar",                      "26",    False,      None,                       "NOT NULL"],  # UNIQUE"],
                     ["mfr_pn",              "varchar",                      "26",  False,      None,                       "NOT NULL"],
                     ["part_mfr",            "varchar",                      "255",  False,      'manufacturers; mfr_id',    "NOT NULL"],
-                    ["part_desc",           "varchar",                      None,   False,      None,                       "NOT NULL"],
+                    ["part_desc",           "varchar",                      None,   False,      None,                       ""],
                     ["url",                 "varchar",                      None,   False,      None,                       ""],
                     ["date_added",          "timestamp without time zone",  None,   None,       None,                       "NOT NULL"]
                 ],
@@ -432,41 +409,6 @@ CREATE TABLE public.{table}
         # return the id if it's found, otherwise don't return anything
         if mfr_id: return mfr_id[0][0]
 
-    def get_checkouts(self, key, keyword="USER"):
-        """get all the parts that would need to be checked out to delete a user
-        I might also add this to the user list system because that would be nice to see"""
-
-        # what table to look in
-        table = "part_locations"
-
-        # because manufacturers are special
-        if keyword == "MANUFACTURER":
-            # set the right table
-            table = "parts"
-
-            # get the mfr id of the mfr
-            key = self.mfr_id_from_name(key)
-
-        # what column to compare
-        column = {"USER": "current_holder",
-                  "PART": "checked_out_part",
-                  "MANUFACTURER": "part_mfr"
-                  }[keyword]
-
-        # what column to read
-        read_col = "part_upc" if keyword == "MANUFACTURER" else "checked_out_part"
-
-        # crop zeros from the front of the key
-        if isinstance(key, str) and key.isnumeric():
-            key_cropped = int(key)
-        else:
-            key_cropped = key
-
-        search_sql = f"SELECT {read_col} FROM {table} WHERE CAST({column} as varchar) = '{key_cropped}'"
-        self.cursor.execute(search_sql)
-        results = self.cursor.fetchall()
-        return [str(row[0]) for row in results]
-
     def update_user(self, old_id, fname, lname, email):
         """update the user account so that it has the new information"""
         # capitalize your name!
@@ -498,30 +440,6 @@ CREATE TABLE public.{table}
         placement, desc = self.cursor.fetchall()[0]
 
         render_upc(code, placement, desc)
-
-    def rename_mfr(self, mfr_id, new_name):
-        """rename the mfr with id mfr_id to new_name"""
-
-        # get the name of the mfr to begin with
-        old_name_sql = f"SELECT * FROM manufacturers WHERE mfr_id = {mfr_id}"
-        self.cursor.execute(old_name_sql)
-        old_name_row = self.cursor.fetchall()
-        if old_name_row:
-            old_name = old_name_row[0][0]
-        else:
-            return "Something went wrong. Please try again."
-
-        # find mfrs that already have this name
-        search_sql = f"SELECT * FROM manufacturers WHERE mfr_name = '{new_name}'"
-        self.cursor.execute(search_sql)
-        results = [row for row in self.cursor.fetchall() if row[0] != old_name]
-        if results: return "This name is already taken"
-
-        # update the mfr
-        update_sql = f"UPDATE manufacturers SET mfr_name = '{new_name}' WHERE mfr_id = {mfr_id}"
-        self.cursor.execute(update_sql)
-        self.conn.commit()
-        return "Success"
 
     def disconnect_customer(self):
         """drop all dependencies on the customer role"""
@@ -766,17 +684,6 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr}"""
 
         self.conn.commit()
 
-    def clear_delete(self, parts_out):
-        """like clear_checkout, but deletes instead."""  # woah when would this need to be used?
-
-        for part in parts_out:
-            delete_cascade_sql = """
-DELETE FROM part_locations WHERE checked_out_part = {0};
-DELETE FROM parts WHERE part_upc = {0} """.format(part)
-            self.cursor.execute(delete_cascade_sql)
-
-        self.conn.commit()
-
     def delete_generic(self, key, keyword):
         """delete the selected item on the list"""
         self.refresh_cursor()  # still don't know if this was actually the fix
@@ -797,123 +704,11 @@ DELETE FROM parts WHERE part_upc = {0} """.format(part)
         self.conn.commit()
         return "-SUCCESS-"
 
-    def add_part(self, desc, mfr_name, mfr_pn, placement, url):
-        """inset a row into the parts database"""
-        # ----- get rid of special characters in the description
-
-        desc = "".join([char for char in desc if char.isalnum() or char in " !\"#$%&'()*+,-./:;<=>?@[]{}\\^_`|~"])
-
-        # ----- manufacturer stuff
-
-        # find if the input mfr already exists
-        all_mfrs = self.get_rows("mfr_name")
-
-        # if there is already some manufacturers to sort through
-        mfr_id = None
-        if len(all_mfrs) > 0:
-            # remove spaces, dots, dashes, capitalization, etc. in the name
-            mfr_formatted = strip_string(mfr_name)
-
-            # search for other manufacturers that have the same name
-            for other_mfr_name in all_mfrs:
-                other_formatted = strip_string(other_mfr_name)
-
-                # if the input mfr is in the table
-                if other_formatted == mfr_formatted:
-                    # get the id of the mfr that has the matching name
-                    sql = f"SELECT mfr_id FROM manufacturers WHERE mfr_name = '{other_mfr_name}'"
-                    self.cursor.execute(sql)
-                    raw_table = self.cursor.fetchall()
-                    mfr_id = raw_table[0][0]
-                    break
-
-            # I don't think this does anything, but I'm afraid to remove it.
-            self.conn.commit()
-
-        # if we weren't able to find an existing mfr with the same id
-        if not mfr_id:
-            # create a new mfr
-
-            mfr_id = self.add_mfr(mfr_name)
-
-        # ----- upc code stuff
-
-        # generate the unique id
-        other_part_mfrs = self.get_rows("part_mfr")
-        unique_id = 1
-        for other_instance in other_part_mfrs:
-            if other_instance == mfr_id:
-                unique_id += 1
-
-        # zero padded mfr id
-        upc = "{0:03d}".format(mfr_id)
-        # padded pn
-        upc += "{0:03d}".format(unique_id)
-        # current date
-        upc += date.today().strftime("%m%d%y")
-
-        # make sure that the upc is actually available
-        upc_check_base = "SELECT * FROM parts WHERE part_upc = "
-        while True:
-            # find matching parts
-            self.cursor.execute(upc_check_base + str(upc))
-            matching_upcs = self.cursor.fetchall()
-
-            # check if the current upc is taken or is too long
-            if len(upc) > 12 or matching_upcs:
-                # if there is a match just start guess and check
-                upc_int = randint(0, 999999999999)
-                upc = "{0:012d}".format(upc_int)
-            else:
-                break
-
-        # capitalize the placement
-        placement = placement
-        # make apostrophes safe
-        safe_desc = desc.replace("'", "''")
-        safe_mfr_pn = mfr_pn.replace("'", "''")
-        safe_placement = placement.replace("'", "''")
-
-        # make sure the webpage starts with https
-        if "." not in url: url = None
-        elif not url.startswith("https://"): url = "https://"+url
-
-        date_added = datetime.today().strftime("%Y-%m-%d %H:%M:")
-
-        # ----- perform the insertion 😈
-        sql = f"INSERT INTO parts VALUES ({upc}, '{safe_placement}', '{safe_mfr_pn}', '{mfr_id}', '{safe_desc}', '{url}', '{date_added}')"
-        self.cursor.execute(sql)
-
-        # change the mfr table to display the number of parts
-        update_mfrs_table = f"""
-UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}"""
-        self.cursor.execute(update_mfrs_table)
-
-        # return render_upc(upc, safe_placement, desc, printer="Zebra ")
-        return upc
-
     def add_mfr(self, mfr_name):
         self.cursor.execute(f"INSERT INTO manufacturers VALUES (default, '{mfr_name}', 0) RETURNING mfr_id")
         self.conn.commit()
 
         return self.cursor.fetchall()[0][0]
-
-    def transfer_parts(self, old_mfr_name, new_mfr_name):
-        """transfer all parts under the old mfr to the new mfr so that it can be deleted"""
-
-        # get the mfr id's of both
-        old_mfr_id = self.mfr_id_from_name(old_mfr_name)
-        new_mfr_id = self.mfr_id_from_name(new_mfr_name)
-
-        # if one of these is missing
-        if not old_mfr_id or not new_mfr_id:
-            print("one manufacturer couldn't find an id")
-            return
-
-        # do the transferring
-        transfer_sql = f"UPDATE parts SET part_mfr = {new_mfr_id} WHERE part_mfr = {old_mfr_id}"
-        self.cursor.execute(transfer_sql)
-        self.conn.commit()
 
     def part_checkin(self, upc):
         """check a part back in"""
@@ -951,56 +746,6 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}""
             return """This hasn't been added yet.
 Please click "Add part" to add a part for the first time"""
 
-    def get_users(self, search_term):
-        """return a dictionary {"F_name L_name - email": "user_id} of all users that have the search term
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡧⠀⡘⠀⡀⠌⡐⠀⠀⣼⣿⣿⣿⣿⣿⠃⢀⠦⡓⢭⡲⢭⣓⠞⢠⣿⡟⢀⣼⢳⡍⠧⡑⠈⡝⠦⡑⡍⡖⣏⢶⡩⢞⠁⡄⠘⡱⢎⡵⢫⢷⣻⣽⣿⣻⣾⢿⣽⡾⣟⣯⡿⣟⣿⣳⣯⢿⡟⣿⣿⣟⡿⣞⡿⣯⣟⣿⢿⣿⣯⡀⠀⢀⠂⠀⠀⠟⡛⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁⠠⠘⠰⢀⡘⠔⢀⣾⣿⣿⣿⣿⣿⠃⠀⡎⠵⣙⠶⣹⢣⡞⠁⣾⡿⢁⡾⣡⠗⡬⠑⢀⡆⡙⢆⠱⡘⠼⣘⠦⣝⢪⠀⣗⡀⠙⡼⣘⢏⡞⡵⣛⡾⣽⢯⣟⠾⡽⣭⢿⣹⢟⣷⡻⣎⢯⢳⡌⢿⣾⣟⣯⢳⡝⣺⠽⣻⣽⣻⡇⠀⠀⠀⠀⢰⡄⠸⡈⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠂⡍⡖⠀⠌⣠⣿⣿⣿⡿⣿⡿⠃⠀⡜⣌⠳⣬⢛⡴⢫⡜⢸⣿⠃⡼⣱⢃⠞⡠⢁⣾⠁⢹⠠⢃⢌⠣⡝⣚⢬⢣⠀⣿⣦⠀⠰⡩⠞⡼⣱⢫⡝⣧⢟⡾⢫⡕⣣⢏⢞⡹⢲⡝⡜⣊⠖⠲⠈⢿⣾⣻⠸⡜⣥⠫⣝⡷⣟⡧⠀⠀⠀⠀⠰⣃⠐⢠⠀⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢀⠱⢠⠄⠈⣴⣿⣿⣿⠟⣼⡿⢡⠃⡜⡰⢊⢷⡸⣍⢞⡣⠄⣿⣏⠴⣣⠧⣉⠎⢁⣼⣯⠇⠰⣉⠌⡄⠳⣌⠧⢎⢧⠀⣿⡽⣷⠀⠈⠽⡰⢣⠳⣜⢬⢫⡜⣳⠸⣑⢎⠎⡕⢣⠜⡰⢡⠎⣡⢃⠘⣿⣽⡆⢹⠰⣍⢲⡹⣟⣿⠀⠀⠀⢀⡃⠲⠀⢠⠂⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⠄⡂⡜⢀⣾⣿⣿⣿⢋⣾⣟⢠⠃⡸⢰⡑⢯⡒⢷⣘⢮⡑⢸⣯⢏⡞⣡⠞⡤⠁⣾⠋⣾⠡⠐⡥⢂⠈⡱⣈⢮⡙⢦⠐⣏⠻⣿⣷⣤⠈⠱⣋⠳⣜⢪⡓⡼⣡⠳⣉⢎⢎⡙⠦⡙⡔⠣⢎⠔⡈⠆⢹⣯⣧⠈⡳⢌⠦⣱⣛⣮⠀⠀⠀⠆⡌⢡⠃⠄⢂⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠀⠆⡑⢠⣾⣿⣿⡻⢃⣾⣿⠋⠆⠰⣁⠦⣙⠦⣏⠳⡜⢦⠁⣾⣏⠞⡴⢱⢊⠀⣼⢏⣾⣿⡅⠈⠴⠈⠐⢠⡑⢦⡙⣧⠈⣟⣦⠹⣿⣿⣄⠀⠉⠷⣌⠳⡜⣥⢃⠯⣜⣊⢦⡙⢦⠱⣌⠳⡌⢎⠱⡈⠄⢻⣿⡄⡹⢌⠲⡡⢞⡵⠀⠀⠀⡇⠄⡃⠥⢈⠄⠘⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁⡈⠂⣴⣟⠫⡍⠰⢁⣾⣿⠃⡜⢀⠣⣐⠣⣍⠞⣌⢳⢩⢚⠀⡿⣌⠏⡼⢡⠂⠰⣿⡾⢿⣿⣇⠀⠓⡄⡄⠂⡜⢢⡝⡶⠐⣸⣿⣷⡜⢿⣿⣷⡠⠘⢌⡳⢍⠶⣩⠞⡴⣊⢦⡙⢆⡳⢌⠣⡜⣌⠲⡁⠎⠈⣿⣷⡱⢋⡒⠥⣫⠖⠀⠠⢌⡓⠌⡰⢁⠎⡐⠈⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡏⠀⢀⡾⢋⡌⢣⠌⢁⣿⡿⠁⡜⠀⢢⠑⡄⠳⣈⠞⡌⢎⠦⡉⢸⡗⡭⢊⡵⠁⣰⣶⣤⣤⣌⡙⠉⠷⠈⠄⢣⠐⣈⠳⣜⣳⠀⣿⣿⣿⣿⣦⡙⣿⣷⡀⠈⠼⣩⠞⣥⢛⡴⣍⠶⣉⠦⣑⠮⣑⢮⣐⢣⠱⡈⠅⠸⣷⡏⡵⢘⡐⢧⣻⠀⡡⢂⡝⢠⠐⡩⠐⢠⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠂⡰⢋⠔⠣⠘⢠⠃⣾⡟⠄⡐⢀⡘⠄⠣⢌⠱⠠⢎⡐⢣⡘⠁⣾⢸⡱⢋⠄⣘⣿⣿⣿⣿⣿⣿⣿⡦⠀⠁⢸⡄⢠⢋⢾⣱⠠⣿⣿⣿⣿⣿⣿⣌⢻⣿⣤⠈⢱⡚⢦⡛⣶⡩⢞⢥⠓⣜⢢⡍⠶⣨⢆⢣⡑⠌⡀⢿⣷⢡⠣⡘⠦⣏⠔⡁⠢⣜⠠⠂⢥⠃⠄⠂⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠅⢀⠰⠌⡌⢁⠊⠄⣸⡟⠀⡐⠀⡄⢢⢉⠒⡌⢂⠇⢢⠘⢤⠘⢰⠋⣦⡙⠂⣠⣾⣿⣿⣿⣿⣿⣿⣿⣿⡄⠘⢸⣧⠀⡚⣼⢳⠀⣿⣿⣿⣿⣿⣿⣿⡷⢈⢁⣤⠀⠍⡧⡝⢦⠻⣍⢮⡙⣤⠣⡜⢳⡰⢎⠲⣌⠒⡀⠘⣿⣎⠱⣀⠛⡼⢐⡈⠔⣌⠂⡉⠔⡨⢈⠄⣻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠃⠈⠐⠈⠆⢠⠂⠌⡐⢰⡿⠂⡐⠀⠰⡈⠆⡌⠒⡌⢌⡘⠤⡉⢆⠁⣼⣙⢦⠙⣠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡀⠈⣿⡇⠘⡴⣻⠀⣹⣿⣿⣿⣿⣿⣿⣶⣾⣷⣿⡖⠀⠱⣩⠏⣝⢮⠳⡜⢤⠓⣍⠲⣱⢪⡑⢆⠣⡔⠁⢹⣎⠧⢠⠙⣞⠀⢎⠐⣌⠂⣁⠚⠄⢢⠀⢽⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠗⢀⣠⣶⠁⠌⠂⡌⢀⠂⢠⡿⠁⠀⠀⠀⣎⠡⡘⢠⠃⢌⠢⠄⡃⠜⡠⢀⡿⣜⠋⣰⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡀⢿⣿⡆⢱⢻⠀⣸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣆⣄⠑⢮⡱⢎⠿⣜⠦⡙⢤⠛⣤⠓⡼⣈⠇⣆⠡⠀⢻⡜⡠⢙⡼⠈⠆⡌⣰⠡⠠⠘⡌⠠⠂⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⢛⣡⣴⣿⣿⡏⠐⢨⠀⠆⠠⠁⣼⠃⠀⠀⠀⡜⢄⠢⠑⡄⢊⠄⡃⠜⡠⢃⠔⠰⣯⠍⢠⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣾⣿⣿⣀⠹⡇⢻⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⡦⡀⠹⢎⡝⣮⢧⠙⣢⠙⣤⠛⣔⢣⡚⢤⢃⠅⡈⠞⠤⡁⢞⡥⠘⡄⢲⠀⡅⢣⠐⡡⠁⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁⡈⠄⡘⢠⠁⢸⠇⠀⠀⠀⣼⠱⡈⠄⡡⠐⠌⢂⡘⠤⠑⠢⠀⣼⠇⠀⠀⠉⠙⠻⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣄⠀⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣧⣀⠉⢞⡬⣛⣇⠰⣉⠦⡹⢌⡖⡍⣆⠫⡔⡀⢈⠱⢈⠺⣄⠱⣌⠲⢁⠰⢀⠇⠄⡡⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠠⠐⢡⡘⠤⢀⡏⠀⠀⠀⣸⡱⢂⡁⠂⠄⡑⠈⡄⠰⡈⢡⠁⠐⡟⢀⣶⣤⣄⣀⠀⠀⠈⠙⠿⣿⣿⡙⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⢀⣸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⡈⠲⡝⡾⣇⠈⡖⣩⠲⣌⠳⣌⢳⣜⡰⠀⠄⠊⣜⣣⢘⡧⡘⠄⢂⠡⢊⡐⠐⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠇⠠⣉⠐⢆⠂⡼⠀⠀⠀⣼⢣⢇⠃⠠⢈⠐⠠⠁⢄⠃⠤⠁⠌⡀⢡⣿⣿⣿⣿⣿⣿⣷⣦⣄⠀⠀⠙⠻⢷⣬⣙⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠿⣿⣿⣿⣿⠿⠟⠛⠛⠁⠀⠘⠵⣻⡄⠸⣄⠳⣌⠳⣌⠧⣿⢰⢃⠘⡀⠰⣧⢸⠲⡍⠂⡌⢐⡃⢄⡉⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⢂⠤⡙⡄⢰⠁⠀⠀⢬⡷⣩⠎⡄⠁⠄⡈⠄⡁⢂⠌⠄⣉⠰⠀⢠⣿⡟⠉⠉⠉⠉⠀⠁⠈⠁⠀⠀⠀⠀⠈⣹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡏⢡⣶⠾⠟⠋⠉⠀⠀⠀⢀⣀⣀⣠⣤⣤⡀⠓⠋⡀⢨⠓⣌⠳⣌⢳⡌⢠⡋⠄⠀⠐⣽⢸⠣⡅⢃⠐⢂⡅⢂⠰⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⡌⢂⡜⠀⠃⠀⠀⡜⢲⡝⠂⣁⡀⠈⡀⠄⡐⠐⡠⢈⠂⢄⠒⠀⠈⣿⣷⣀⣠⣤⣤⣶⣶⣶⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣯⠁⠀⠀⠀⠀⠀⠶⠾⣿⣿⣿⣿⣿⣿⣿⣿⠄⠀⠱⠀⡹⢄⣛⠈⣁⡘⢂⣇⠈⠆⠀⢘⣯⠃⡜⣀⠊⢄⡒⠈⡔⠀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠇⡐⢌⠒⠆⡈⠀⢠⠘⣌⢻⠌⣸⣿⠇⠀⢀⠐⠠⢁⡐⠠⠌⠂⢌⠀⠀⢹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣦⣤⣄⣀⠀⠀⠀⠉⠙⠻⢿⣿⡏⠀⠐⡀⠅⢀⠣⠎⠐⣿⣧⡀⢺⡀⠌⢡⠘⣮⠑⡌⠤⠈⡔⢨⢁⠰⠈⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⡰⢈⢜⡂⠀⢀⡎⠴⡨⡇⢰⣿⣿⡁⠀⠀⠌⡐⠠⠀⡡⠘⡈⠤⠀⠀⠀⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⣄⣀⣠⣿⡟⠀⡈⠄⡐⠌⡄⢀⠩⠀⢿⣿⡄⠠⡇⠈⠄⠢⣝⠢⠜⡠⢃⡐⢃⠄⢊⠁⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡏⠠⡐⠡⡸⠀⢠⢃⡜⢰⠱⠇⣼⣿⣿⠄⠀⠈⠄⠠⠁⠠⢂⠡⡐⠐⡀⢠⣶⡎⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⠠⠀⢂⠄⠃⠀⣬⣂⠀⢼⣿⣧⠀⢳⠈⠌⢡⢘⡇⡱⠄⡃⠌⡆⡘⠤⠁⢹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠁⡰⢁⠣⡅⡘⢄⠺⡄⢣⠛⢰⣿⣿⣿⠀⠀⠌⠠⠁⣴⣆⠁⢂⠔⠡⠀⣿⣿⣿⡸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠀⠀⡅⠀⢠⣄⡀⢈⣿⣿⣄⠈⣿⣿⣄⠈⠧⡘⢀⠎⡖⢱⡈⠔⡡⢚⡀⢆⡁⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡯⠀⡔⢡⢊⡵⢈⠜⣸⠐⣣⠁⣾⣿⣿⠿⠀⠀⠌⢀⣾⣿⡏⠀⠌⡠⢁⠀⠻⣿⣿⣷⡜⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠿⠿⠿⠿⠿⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⢋⣄⠀⡘⠀⠠⠘⢻⡻⣿⣿⣿⣿⠆⣿⣿⣧⠀⢃⠆⡡⢂⢝⠢⠜⡠⢁⠧⡈⢄⠒⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⠰⡈⢆⣩⠆⣅⠚⣤⠙⡄⠸⣽⣿⣿⠁⠀⠀⣠⣿⣿⡿⠰⠀⢂⡁⢂⠀⣆⡈⠻⣿⣿⣦⡹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡄⣻⢖⡶⣹⢖⡶⣤⠦⠄⣹⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡿⣡⣿⡟⠠⠁⣀⠃⢀⢸⣿⣿⣿⣿⣿⡇⢿⣿⣿⡄⠈⢆⠡⢂⠌⣇⠓⠤⡉⢖⠡⠊⡌⢈⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠅⢢⠑⡌⡲⢌⡄⣋⠴⣉⠀⣩⣿⣿⡏⠀⢀⣴⣿⣿⣿⢁⣿⡅⢀⠒⠠⢀⣿⣷⣆⡈⠛⠿⠛⠛⠻⠿⠿⠿⢿⣿⣿⣿⣿⣷⡈⠻⣜⣧⣻⡜⡧⠋⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⣋⣴⣿⡿⠀⠀⠐⠤⠁⣾⣇⢹⣿⡿⢿⣿⣿⢸⣿⣿⣯⠀⢨⠂⡅⢊⡼⡘⠤⡑⢎⠰⢡⠘⡀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠀⢢⡉⠴⣙⠤⡘⢤⡓⠌⢠⣾⣿⣿⠀⣠⣾⣿⣿⣿⠇⣾⣿⣯⠀⠌⡡⠠⣿⣿⣿⣿⣦⣄⣀⠀⠂⠀⠀⠀⠀⠀⠀⠀⠉⠛⢿⣷⣬⣌⣁⣭⣴⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⣋⣥⣾⣿⣿⣿⢃⡆⠀⢩⢀⣾⣿⣿⡌⢿⣿⣎⣿⣿⡄⣿⣿⣿⡆⢀⠳⣸⠠⡹⢄⠣⡘⢼⢀⠣⡘⡀⢿⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡷⢀⠣⡘⢔⡫⢰⡉⢦⠍⠂⣸⣿⣿⡿⠁⣾⡟⣽⣿⡟⣰⣿⣿⣿⡀⢂⠡⢐⣿⣿⣿⣿⣿⣿⣿⣷⣤⠀⠀⠀⠋⠀⠀⠂⠀⠀⣸⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠿⠋⣁⣀⣀⣉⣙⣛⣻⣿⣧⣞⠀⠨⢀⣾⣿⣿⣿⣿⡘⣿⣿⡜⣿⣷⠸⣿⣿⣷⡀⠱⢸⠅⣟⠄⢣⠑⢮⠠⢃⠴⠁⢺⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⡇⢈⣒⣉⠆⠛⣀⣈⣐⢃⣴⣿⣿⣿⠅⢘⣿⣽⢿⡿⢠⣿⣿⣿⣿⣧⠀⠆⢈⣿⣿⣿⣿⣿⣿⣿⣿⣿⣶⣶⢢⣤⡠⢤⣤⣤⡴⢿⣿⣿⣿⣿⣿⣿⡿⠿⣛⣭⠇⣠⡴⣹⣿⣿⣿⣿⣿⣿⣿⣿⣿⠇⠀⢠⣾⣿⣿⣿⣿⣿⣧⢹⣿⣷⣽⣿⡆⢿⣿⣿⣷⡄⢚⣉⣈⠋⠠⣍⣺⠀⠉⠦⣉⢸⣿⣿⣿⣿⣿⣿⣿⣿⣿
-        ⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠏⠠⠚⣃⣋⣰⣿⣿⣿⣟⣡⣿⣿⣿⣿⣿⣿⣿⡤⣶⢀⣾⣿⣿⣿⣿⣿⣂⠨⢀⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣬⠛⡓⢦⡙⠻⣿⣷⣬⣍⣛⣭⣵⣶⣾⡿⢋⣡⠞⣉⢰⣿⣿⣿⣿⣿⣿⣿⣿⣿⡟⠀⢀⣾⣿⣿⣿⣿⣿⣿⣿⡆⢩⣦⣛⣿⣿⣾⣿⣿⣿⣧⡙⢿⣿⣯⡑⣈⣑⣋⠳⢢⡀⠈⣿⣿⣿⣿⣿⣿⣿⣿⣿
-
-        """
-        # get the full users table
-        sql = "SELECT * FROM users"
-        self.cursor.execute(sql)
-        users_table = self.cursor.fetchall()
-
-        # the table that all the results go into
-        filtered_users = {}
-
-        # iterate through the whole table
-        for row in users_table:
-            # if the search term in the row
-            if search_term in " ".join(row).lower():
-                filtered_users[f"{row[1]} {row[2]}  -  {row[3]}"] = row[0]
-                #                first name  last name   email      user id
-
-        return filtered_users
-
     def update_part(self, part_number, placement, mfr_pn, mfr, desc, url):
         """update the row in the parts table with the new date for the part"""
         if url == "": url = None
@@ -1029,16 +774,6 @@ Please click "Add part" to add a part for the first time"""
         update_sql = f"UPDATE parts SET (part_placement, mfr_pn, part_mfr, part_desc, url) = ('{placement}', '{mfr_pn}', {mfr}, '{desc}', '{url}') WHERE part_upc = {part_number}"
         self.cursor.execute(update_sql)
         self.conn.commit()
-
-    def placement_taken(self, placement):
-        """make sure that the placement location provided isn't already in use"""
-
-        # find the part in the database
-        sql = f"SELECT * FROM parts WHERE part_placement = '{placement}'"
-        self.cursor.execute(sql)
-        results = self.cursor.fetchall()
-
-        return bool(results)
 
     def part_checkout(self, part_id, user_id, force=False):
         """add the part to the currently checked out parts table"""
@@ -1201,21 +936,6 @@ WHERE checked_out_part = {part_id}"""
         if raw_table: return search_results
         return formatted_results
 
-    def search_for(self, keyword, search_key):
-        """make a general search from the search area (keyword) and the search term (search_key)"""
-        keyword = keyword.lower()
-
-        # if a upc was selected
-        if not search_key or search_key == "No matching items":
-            return {"No result": ""}
-
-        # remove extra characters from the search key
-        if search_key.isnumeric(): search_key = str(int(search_key))
-
-        # insert the data into the output box
-        get_info_func = getattr(self, keyword + "_data")
-        return get_info_func(search_key)
-
     def update_mfr_part_count(self, mfr_name):
         """update the number of parts for the mfr"""
 
@@ -1275,15 +995,6 @@ JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
                 why_another_stage.append([*row, f"Out ({result})" if result else "Available"])
 
             return [[u[1], u[2], u[0], u[3], u[4], u[5], u[6]] for u in why_another_stage]
-
-    def upc_from_mfrpn(self, mfr_pn):
-        """get the upc cade of a part if you have the mfr id"""
-        self.cursor.execute(f"SELECT part_upc FROM parts WHERE mfr_id = '{mfr_pn}'")
-        return self.cursor.fetchall()
-
-    def part_exists(self, pn):
-        self.cursor.execute(f"SELECT part_upc FROM parts WHERE part_upc = {pn}")
-        return bool(self.cursor.fetchall()[0])
 
     def part_data(self, target_upc, raw=False):
         """get the part information for a upc code"""
@@ -1415,108 +1126,6 @@ WHERE user_id = '{target_id}'"""
                 "Parts checked out": parts_out
             }
             return formatted_results
-
-    # checked out parts
-    def checkout_search(self, search_term, filters):
-        """get the matching upc codes to a search term"""
-        # sql to search for search term
-        search_sql = f"""
-SELECT checked_out_part FROM part_locations
-JOIN parts ON part_locations.checked_out_part = parts.part_upc
-JOIN users ON part_locations.current_holder = users.user_id
-"""
-        results = self.search_general(search_sql, search_term, filters)
-        return [str(item).zfill(12) for item in results]
-
-    def checkout_data(self, target_upc):
-        """get the part information for a upc code"""
-        # sql to search for search term
-        search_sql = f"""
-SELECT checked_out_part, part_desc, current_holder, first_name, last_name, checkout_timestamp FROM part_locations
-JOIN parts ON part_locations.checked_out_part = parts.part_upc
-JOIN users ON part_locations.current_holder = users.user_id
-WHERE cast(checked_out_part as varchar) = '{target_upc}'"""
-        self.cursor.execute(search_sql)
-        search_results = self.cursor.fetchall()
-
-        # take the first row
-        if search_results:
-            search_results = search_results[0]
-        else:
-            return {"No results": ""}
-
-        # change the table into a dictionary
-        formatted_results = {
-            "Part UPC": search_results[0],
-            "Part description": search_results[1],
-            "Checked out by": f"{search_results[3]} {search_results[4]} ({search_results[2]})",
-            "Checked out on": search_results[5].strftime("%A, %B %d, %I:%M %p, %Y")
-        }
-
-        return formatted_results
-
-        # manufacturers
-
-    def manufacturer_search(self, search_term, filters):
-        """get the matching mfrs to a search"""
-
-        # sql to search for search term
-        search_sql = f"""
-SELECT mfr_id FROM manufacturers
-"""
-        # normal
-        internal_results = self.search_general(search_sql, search_term, filters)
-
-        # if the no results message is here, just pass it on.
-        if isinstance(internal_results[0], str): return internal_results
-
-        # turn search list into a string list
-        result_strings = [str(term) for term in internal_results]
-
-        # search for the mfr names using the provided id's
-        search_list = "(" + ", ".join(result_strings) + ")"
-        new_search = "SELECT mfr_name FROM manufacturers WHERE mfr_id in " + search_list
-
-        # get the results
-        self.cursor.execute(new_search)
-        results = self.cursor.fetchall()
-
-        # return the formatted list
-        return [item[0] for item in results]
-
-    def manufacturer_data(self, target_name):
-        """get the part information for a upc code"""
-
-        # first off, update the checked out parts for the mfr
-        self.update_mfr_part_count(target_name)
-
-        # sql to search for search term
-        search_sql = f"""
-SELECT mfr_id, mfr_name, number_of_parts FROM manufacturers
-WHERE mfr_name = '{target_name}'"""
-        self.cursor.execute(search_sql)
-        search_results = self.cursor.fetchall()
-
-        # take the first row
-        if search_results:
-            search_results = search_results[0]
-        else:
-            return {"No results": ""}
-
-        # change the table into a dictionary
-        formatted_results = {
-            "Unique serial ID": search_results[0],
-            "Manufacturer name": search_results[1],
-            "Number of parts in database": search_results[2]
-        }
-
-        return formatted_results
-
-    def customer_exists(self, db_name):
-        user_check_sql = f"SELECT 1 FROM pg_roles WHERE rolname='customer_{db_name}'"
-        self.cursor.execute(user_check_sql)
-
-        return f"customer_{db_name}" in self.cursor.fetchall()
 
     def cursor_exists(self):
         return self.cursor
