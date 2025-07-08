@@ -405,7 +405,8 @@ class MainWindow:
         data = [  # Title, Description, Button text, command
             ("Format Database", "Resets the database with all default tables", "Format", self.format_database),
             ("Populate Database", "Fills the database up with random data. Useful for testing", "Populate", self.populate_database),
-            ("Drop Database", "Completely delete the database. This window might no longer function as expected until the database is reformatted.", "Drop", self.drop_db)
+            ("Drop Database", "Completely delete the database. This window might no longer function as expected until the database is reformatted.", "Drop", self.drop_db),
+            ("Change Location", "Change where this machine thinks that it is. Returned parts will show as being in the new location.", self.change_locatoin)
         ]
 
         for args in data:
@@ -718,6 +719,9 @@ class MainWindow:
         finally:
             self.window.attributes('-fullscreen', True)
             # self.window.state("zoomed")
+
+    def change_location(self):
+        print("yeah this doesn't work yet")
 
     def create_user(self):
         self.search_mode = "user"
@@ -1477,15 +1481,17 @@ class MainWindow:
 
     @handle_exceptions
     def checkin_continue(self, *_):
-        # check for database connection, a seleced part, and in part mode
+        # check for database connection, a srelected part, and in part mode
         if not self.check_db_connection(): return
         if not self.selected_part_key: return self.popup_msg("you need to select a part first!")
 
-        self.popup_prompt("Return part "+self.selected_part_key+"?")
-        print(self.prompt_response)
-        if self.prompt_response != "Yes":
+        popup = CTkMessagebox(message="Return part "+self.controller.part_num_from_upc(self.selected_part_key)+"?", title="Are you sure?", options=["Yes", "Cancel"], icon="question")
+        response = popup.get()
+        if response != "Yes":
             print("user picked no")
             return
+
+        self.raise_kiosk()
 
         # database checkin
         upc = self.selected_part_key  # self.checkin_barcode.get()

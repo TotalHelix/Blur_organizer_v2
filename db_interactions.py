@@ -222,6 +222,11 @@ class Organizer:
         self.cursor.close()
         self.conn.close()
 
+    def pn_from_upc(self, upc):
+        """take the upc and return the matching part number"""
+        self.cursor.execute(f"SELECT mfr_pn FROM parts WHERE part_upc = {upc};")
+        return self.cursor.fetchall()[0][0]
+
     def userid_exists(self, userid):
         """check if the userid specified exists in the database"""
         search_sql = f"SELECT user_id FROM users WHERE user_id = '{userid}'"
@@ -937,9 +942,9 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}""
                 self.cursor.execute(checkin_sql)
 
                 self.conn.commit()
-                return "Successfully checked in." + pos_message
+                return "Part successfully returned."
             else:
-                return "The scanned part was never checked out." + pos_message + " or check out instead."
+                return "The scanned part was never checked out."
 
         else:
             # if the part can't be found in the parts table
