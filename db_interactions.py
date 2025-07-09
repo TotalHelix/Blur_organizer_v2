@@ -704,6 +704,101 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr}"""
         self.conn.commit()
         return "-SUCCESS-"
 
+    def add_part(self, desc, mfr_name, mfr_pn, placement="None", url="None"):
+        """inset a row into the parts database"""
+        # ----- get rid of special characters in the description
+
+        desc = "".join([char for char in desc if char.isalnum() or char in " !\"#$%&'()*+,-./:;<=>?@[]{}\\^_`|~"])
+
+        # ----- manufacturer stuff
+
+        # find if the input mfr already exists
+        all_mfrs = self.get_rows("mfr_name")
+
+        # if there is already some manufacturers to sort through
+        mfr_id = None
+        if len(all_mfrs) > 0:
+            # remove spaces, dots, dashes, capitalization, etc. in the name
+            mfr_formatted = strip_string(mfr_name)
+
+            # search for other manufacturers that have the same name
+            for other_mfr_name in all_mfrs:
+                other_formatted = strip_string(other_mfr_name)
+
+                # if the input mfr is in the table
+                if other_formatted == mfr_formatted:
+                    # get the id of the mfr that has the matching name
+                    sql = f"SELECT mfr_id FROM manufacturers WHERE mfr_name = '{other_mfr_name}'"
+                    self.cursor.execute(sql)
+                    raw_table = self.cursor.fetchall()
+                    mfr_id = raw_table[0][0]
+                    break
+
+            # I don't think this does anything, but I'm afraid to remove it.
+            self.conn.commit()
+
+        # if we weren't able to find an existing mfr with the same id
+        if not mfr_id:
+            # create a new mfr
+
+            mfr_id = self.add_mfr(mfr_name)
+
+        # ----- upc code stuff
+
+        # generate the unique id
+        other_part_mfrs = self.get_rows("part_mfr")
+        unique_id = 1
+        for other_instance in other_part_mfrs:
+            if other_instance == mfr_id:
+                unique_id += 1
+
+        # zero padded mfr id
+        upc = "{0:03d}".format(mfr_id)
+        # padded pn
+        upc += "{0:03d}".format(unique_id)
+        # current date
+        upc += date.today().strftime("%m%d%y")
+
+        # make sure that the upc is actually available
+        upc_check_base = "SELECT * FROM parts WHERE part_upc = "
+        while True:
+            # find matching parts
+            self.cursor.execute(upc_check_base + str(upc))
+            matching_upcs = self.cursor.fetchall()
+
+            # check if the current upc is taken or is too long
+            if len(upc) > 12 or matching_upcs:
+                # if there is a match just start guess and check
+                upc_int = randint(0, 999999999999)
+                upc = "{0:012d}".format(upc_int)
+            else:
+                break
+
+        # capitalize the placement
+        placement = placement.upper()
+        # make apostrophes safe
+        safe_desc = desc.replace("'", "''")
+        safe_mfr_pn = mfr_pn.replace("'", "''")
+        safe_placement = placement.replace("'", "''")
+
+        # make sure the webpage starts with https
+        if "." not in url: url = None
+        elif not url.startswith("https://"): url = "https://"+url
+
+        date_added = datetime.today().strftime("%Y-%m-%d %H:%M:")
+
+        # ----- perform the insertion 😈
+        sql = f"INSERT INTO parts VALUES ({upc}, '{safe_placement}', '{safe_mfr_pn}', '{mfr_id}', '{safe_desc}', '{url}', '{date_added}')"
+        self.cursor.execute(sql)
+
+        # change the mfr table to display the number of parts
+        update_mfrs_table = f"""
+UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}"""
+        self.cursor.execute(update_mfrs_table)
+
+        # return render_upc(upc, safe_placement, desc, printer="Zebra ")
+        return upc
+
     def add_mfr(self, mfr_name):
         self.cursor.execute(f"INSERT INTO manufacturers VALUES (default, '{mfr_name}', 0) RETURNING mfr_id")
         self.conn.commit()
@@ -746,15 +841,13 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr}"""
             return """This hasn't been added yet.
 Please click "Add part" to add a part for the first time"""
 
-    def update_part(self, part_number, placement, mfr_pn, mfr, desc, url):
+    def update_part(self, part_number, mfr_pn, mfr, desc, url):
         """update the row in the parts table with the new date for the part"""
         if url == "": url = None
         elif not url.startswith("https://"): url = "https://"+url
 
         # convert the mfr if a name is given instead of an id
         if isinstance(mfr, str) and not mfr.isnumeric():
-
-            placement = placement
 
             new_mfr = self.mfr_id_from_name(mfr)
             # if the new manufacturer isn't in the database
@@ -763,15 +856,8 @@ Please click "Add part" to add a part for the first time"""
             else:
                 mfr = new_mfr
 
-        # make sure unique part placement
-        find_placement = f"SELECT part_upc FROM parts WHERE part_placement = '{placement}'"
-        self.cursor.execute(find_placement)
-
-        matches = [result for result in self.cursor.fetchall() if int(result[0]) != int(part_number)]
-        if matches: return "-PLACEMENT_ALREADY_TAKEN-"
-
         # do the update
-        update_sql = f"UPDATE parts SET (part_placement, mfr_pn, part_mfr, part_desc, url) = ('{placement}', '{mfr_pn}', {mfr}, '{desc}', '{url}') WHERE part_upc = {part_number}"
+        update_sql = f"UPDATE parts SET (mfr_pn, part_mfr, part_desc, url) = ('{mfr_pn}', {mfr}, '{desc}', '{url}') WHERE part_upc = {part_number}"
         self.cursor.execute(update_sql)
         self.conn.commit()
 
@@ -828,15 +914,6 @@ WHERE checked_out_part = {part_id}"""
         # capitalize your name!
         f_name = f_name.title()
         l_name = l_name.title()
-
-        # check if the email address is already used
-        email_check_sql = f"SELECT * FROM users WHERE email = '{email}'"
-        self.cursor.execute(email_check_sql)
-        email_results = self.cursor.fetchall()
-
-        # if there are matching emails
-        if len(email_results) > 0:
-            return "-EMAIL_ALREADY_TAKEN-"
 
         # if the first and last name is taken
         if self.name_is_taken(f_name, l_name):
@@ -961,7 +1038,6 @@ WHERE checked_out_part = {part_id}"""
     def part_search(self, search_term, search_columns=None, more_info=True):
         """get the matching upc codes to a search term"""
         # sql to search for search term
-        print("search term when called:", search_term)
 
         if search_columns is None:
             search_columns = {
@@ -989,7 +1065,6 @@ JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
                 self.cursor.execute(f"SELECT first_name, last_name FROM part_locations JOIN users ON part_locations.current_holder = users.user_id WHERE checked_out_part = {row[0]}")
                 result = self.cursor.fetchall()
                 if result: result = " ".join(result[0])
-                print("search result:", result)
                 # why_another_stage.append([*row, "✖" if result else "✔"])  # looks better but there's a stray pixel on the check ):
                 # why_another_stage.append([*row, chr(0x00A0) if result else "✓"])
                 why_another_stage.append([*row, f"Out ({result})" if result else "Available"])
@@ -1044,9 +1119,8 @@ WHERE cast(part_upc as varchar) = '{int(target_upc)}'"""
             "UPC code": str(search_results[0]).zfill(12),
             "Placement location": search_results[1],
             "Manufacturer": search_results[2],
-            "Manufacturer's part number": mfr_pn,
+            "Part number": mfr_pn,
             "Currently checked out by": checkout_holder,
-            # "Quantity": search_results[5],
             "Description": search_results[4],
             "Link to original part": search_results[5],
             "Date added": search_results[6].strftime("%b %d, %Y - %I:%M %p")

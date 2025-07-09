@@ -67,15 +67,12 @@ def list_button_format(text, search_mode):
     :param search_mode: format as part or as user
     :return: string formatted text
     """
-    print(text)
     if not isinstance(text, (tuple, list)):
-        print("the text:", text)
         raise("list_button_format requires a tuple argument, but received", type(text))
 
     if search_mode == "part":
         final_string = ""
         text = [text[6], *text[:6]]
-        print(text)
         lengths = [24, 21, 16, 14, 12, 16, 34]
     else:
         final_string = ""
@@ -157,7 +154,6 @@ def handle_exceptions(func):
         except Exception as er:
 
             args[0].popup_msg(str(er))
-            print(er)
             raise er  # TODO: comment this out again when you deploy (it will crash the program (i think))
     return wrapper
 
@@ -194,7 +190,6 @@ class MainWindow:
         self.selected_part_key = ""
         self.checkout_upc = ""
         self.output_frames = []
-        self.prompt_response = None
         self.is_fullscreen = True
         self.previous_screen = ""
         self.checkout_user = ""
@@ -279,7 +274,7 @@ class MainWindow:
         ctk.CTkLabel(self.checkout_user_frame, text="_"*46, fg_color="transparent", font=subtitle, text_color="grey").pack()
 
         # "Check out as Reuben Tart?" message
-        self.checkout_message = ctk.CTkLabel(self.checkout_user_frame, text=" ", font=subtitle)
+        self.checkout_message = ctk.CTkLabel(self.checkout_user_frame, text="FILLER TEXT", font=subtitle)
         self.checkout_message.pack()
 
         # check out button (not a trick like the 'go' button)
@@ -850,15 +845,8 @@ class MainWindow:
             self.connection = False
 
     @handle_exceptions
-    def set_response(self, popup, response):
-        """sets self.prompt_response to response and deletes the popup window"""
-        self.prompt_response = response
-        popup.destroy()
-
-    @handle_exceptions
     def print_label(self, upc=None):
         """print a label from a upc code"""
-        print(upc)
         if not upc:
             upc = self.manage_search_box.cget("text")
             if not (upc.isnumeric() and len(upc) == 12):
@@ -866,52 +854,6 @@ class MainWindow:
                 return
 
         self.controller.upc_create(upc)
-
-    @handle_exceptions
-    def popup_prompt(self, message="Are you sure?", options=None):
-        """
-        Creates a prompt for the user to click one of the provided options.
-        Get the user response by reading self.prompt_response ofter calling.
-        """
-        if not options:
-            options = ["Yes", "Cancel"]
-
-        popup = ctk.CTkToplevel()
-        popup.title(message)
-
-        # center the popup to the middle of the window
-        root_x = self.window.winfo_x()
-        root_y = self.window.winfo_y()
-        root_width = self.window.winfo_width()
-        root_height = self.window.winfo_height()
-        popup_width = 350
-        popup_height = 120
-
-        popup_x = root_x + (root_width // 2) - (popup_width // 2)
-        popup_y = root_y + (root_height // 2) - (popup_height // 2)
-        popup.geometry(f"{popup_width}x{popup_height}+{popup_x}+{popup_y}")
-
-        # remove the title bar
-        popup.overrideredirect(True)
-
-        ctk.CTkLabel(popup, text=message, fg_color="transparent", font=("Arial", 16)).pack(pady=10)
-        buttons_frame = ctk.CTkFrame(popup, fg_color="transparent")
-        buttons_frame.pack()
-
-        for option in options:
-            option_button = ctk.CTkButton(buttons_frame, text=option, command=lambda response=option: self.set_response(popup, response))
-
-            # make yes/confirm green and no/cancel red
-            if option.lower() == "yes" or option.lower() == "confirm":
-                option_button.configure(**color_green)
-            elif option.lower() == "no" or option.lower() == "cancel":
-                option_button.configure(**color_red)
-
-            option_button.pack(side="left", padx=10, pady=10)
-
-        popup.transient(self.window)
-        popup.grab_set()
-        self.window.wait_window(popup)
 
     @handle_exceptions
     def make_link_button(self, itf, ref):
@@ -936,20 +878,13 @@ class MainWindow:
     @handle_exceptions
     def checkout_finalize(self, force=False):
         """take the upc and user id and check out the part."""
-        print("checkout called")
         self.reverse_users = {" ".join(key[1:2]) if isinstance(key, tuple) else key: val for key, val in self.reverse_users.items()}
-
-        print("reverse users:")
-        for key, val in self.reverse_users.items():
-            print("\tkey:", key)
-            print("\tvalue:", val)
 
         if not self.controller.userid_exists(self.checkout_user):
             self.popup_msg("please select a valid user.")
             return
 
         upc = self.selected_part_key
-        print("upc:", upc, "uid:", self.checkout_user, "force:", force)
 
         result = self.controller.part_checkout(upc, self.checkout_user, force)
 
@@ -986,8 +921,6 @@ class MainWindow:
 
             if popup.get() == "Yes":
                 self.checkout_finalize(force=True)
-
-            print("prompt res:", self.prompt_response)
 
     @handle_exceptions
     def make_new_form(self, search_mode):
@@ -1035,6 +968,8 @@ class MainWindow:
     def add_part(self):
         """add a new part to the database"""
         self.form_mode_add = True  # set the form to add mode and not edit mode
+        self.back_to_checkout = False  # don't go back to the kiosk screen
+
         if self.search_mode == "part":
             self.new_part_form.tkraise()
         else:
@@ -1049,30 +984,26 @@ class MainWindow:
     def edit_part_form(self):
         """edit the information on the selected part or user"""
         # from when search and manage where on the same tab
-        # if not self.selected_part:
-        #     self.popup_msg("Please select a part to edit.")
-        #     return
 
-        user_id = self.get_user_input()
-        print("user id got:", user_id)
-        if user_id == "-QUIT-": return
+        user_id_or_upc = self.get_user_input()
+        if user_id_or_upc == "-QUIT-": return
 
         self.form_mode_add = False  # set the form to edit mode and not add mode
+        self.back_to_checkout = False  # don't return to kiosk mode
 
+        # if editing a part
         if self.search_mode == "part":
-            print("key sent to database:", user_id)
-            data = self.controller.part_data(user_id)
-            print("got data:", data)
+            data = self.controller.part_data(user_id_or_upc)
             self.new_part_form.tkraise()
-            print("looping:")
+            self.selected_part_key = user_id_or_upc
+
             for name, entry in self.add_part_entries.items():
-                print("\tname:", name)
-                print("\tentry:", entry)
                 entry.delete(0, "end")
                 entry.insert(0, data[name])
 
+        # if editing a user
         else:
-            data = self.controller.user_data(user_id)
+            data = self.controller.user_data(user_id_or_upc)
             self.new_user_form.tkraise()
             for name, entry in self.add_user_entries.items():
                 entry.delete(0, "end")
@@ -1080,6 +1011,7 @@ class MainWindow:
 
     @handle_exceptions
     def get_user_input(self):
+        """Get the text from the manage users or manage parts screen"""
         id_upc = self.manage_search_box.cget("text")
 
         # go ahead and complain if there is nothing in the field
@@ -1090,7 +1022,6 @@ class MainWindow:
             # make sure the part exists
         if self.search_mode == "part":
             if (len(id_upc) != 12) or (not self.controller.part_search(search_term=id_upc, search_columns={"part_upc": True})):
-                print("delete invalid")
                 self.popup_msg("We couldn't find this part UPC")
                 return "-QUIT-"
         else:
@@ -1099,7 +1030,6 @@ class MainWindow:
 
             for line in results:
                 if line == id_upc:
-                    print(line,"==",id_upc,":",line==id_upc)
                     found = True
                     break
 
@@ -1116,17 +1046,18 @@ class MainWindow:
         id_upc = self.get_user_input()
         if id_upc == "-QUIT-": return
 
-        self.popup_prompt(message=f"Delete {self.search_mode} {id_upc}?")
-        if self.prompt_response == "No": return
+        ask_message = CTkMessagebox(title="Are you sure?", message=f"Delete {self.search_mode} {id_upc}?", options=["Yes", "Cancel"], icon="question")
+        if ask_message.get() == "Cancel": return
 
         result = self.controller.delete_generic(id_upc, self.search_mode)
 
         if result == "-PARTS_STILL_CHECKED_OUT-":
 
-            warning_msg = "This user still has parts checked out." if self.search_mode == "user" else "This part is still checked out."
+            warning_msg = "This user still has parts checked out!" if self.search_mode == "user" else "This part is still checked out!"
 
-            self.popup_prompt(message=f"Warning!\n{warning_msg}\nWould you like to return checked out part(s)?")
-            if self.prompt_response.lower() == "yes" or self.prompt_response.lower() == "confirm":
+            popup = CTkMessagebox(title="Warning!", message=f"{warning_msg}\nWould you like to return checked out part(s)?", options=["Yes", "Cancel"], icon="warning")
+            result = popup.get()
+            if result.lower() == "yes":
                 self.controller.clear_checkout(id_upc)
                 self.controller.delete_generic(id_upc, self.search_mode)
             else:
@@ -1172,33 +1103,27 @@ class MainWindow:
 
         # new part mode
         if self.form_mode_add:
-            print("trying to add a part")
             try:
                 if self.search_mode == "part":
-                    result = self.controller.add_part_button(fields[3], *fields[:3], *fields[4:])
+                    result = self.controller.add_part(fields[3], *fields[:3], *fields[4:])
                 else:
                     result = self.controller.add_user(*fields)
 
-                    if result == "-EMAIL_ALREADY_TAKEN-":
-                        self.popup_msg("This email is already in use!")
-                        self.add_user_entries["Email"].configure(border_color=red)
-                        return
-
-                    elif result == "-NAME_ALREADY_TAKEN-":
+                    if result == "-NAME_ALREADY_TAKEN-":
                         self.popup_msg("This name is already in use")
                         self.add_user_entries["First name"].configure(border_color=red)
                         self.add_user_entries["Last name"].configure(border_color=red)
                         return
 
             except p2er.UniqueViolation:
-                # self.popup_msg("this placement already exists! to change the quantity of a part, select edit from the \"find a part\" tab.")
-                return
+                raise Exception("a value that was entered that should be unique was already found in the database")
 
         # edit part mode
         else:
-            print("trying to edit a part")
             if self.search_mode == "part":
+                print("before")
                 selected_part_upc = self.get_user_input()
+                print("selected part upc: "+str(selected_part_upc))
 
                 # if they somehow got here but didn't have a valid upc? not sure how this would happen.
                 if selected_part_upc == "-QUIT-":
@@ -1206,7 +1131,7 @@ class MainWindow:
                     self.popup_msg("Invalid UPC")
                     return
 
-                result = self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], placement=fields[2], desc=fields[3], url=fields[4])
+                result = self.controller.update_part(selected_part_upc, mfr=fields[0], mfr_pn=fields[1], desc=fields[2], url=fields[3])
 
                 if result == "-PLACEMENT_ALREADY_TAKEN-":
                     self.popup_msg("This placement location is already in use.")
@@ -1231,13 +1156,12 @@ class MainWindow:
                     self.popup_msg("This email is already in use.")
                     return
 
-        # self.raise_manage(self.search_mode)
-        print("\tRESULT:", result)
-        self.raise_manage(self.search_mode)
-        self.manage_search_box.configure(f"No {self.search_mode} Selected")
-        self.manage_finder_update()
-        if self.back_to_checkout: self.checkout_continue(auto_select=result)
-        # self.list_button_select(database_key=result)
+        if self.back_to_checkout:
+            self.checkout_continue(auto_select=result)
+        else:
+            self.raise_manage(self.search_mode)
+            self.manage_search_box.configure(f"No {self.search_mode} Selected")
+            self.manage_finder_update()
 
     @handle_exceptions
     def reconnect_db(self):
@@ -1299,9 +1223,9 @@ class MainWindow:
         """get rid of the db"""
 
         # confirm if the user wants to nuke everything
-        self.popup_prompt("Are you sure?\nThis will delete everything in the database.")
-        if not (self.prompt_response.lower() == "yes" or self.prompt_response.lower() == "confirm"):
-            return
+        popup = CTkMessagebox(title="Are you sure?", message="This will delete everything in the database.", icon="warning", options=["Drop database", "Cancel"])
+        result = popup.get()
+        if result.lower() != "drop database": return
 
         # make sure that we are able to connect to the database
         if not self.check_db_connection(accept_postgres=True): return
@@ -1318,9 +1242,9 @@ class MainWindow:
         # confirm if the user wants to nuke everything
         # said "response is not yes" here instead of "response is no" because force
         # closing will count as a no, so one less way to accidentally nuke
-        self.popup_prompt("Are you sure?\nThis will delete everything in the database.")
-        if not (self.prompt_response.lower() == "yes" or self.prompt_response.lower() == "confirm"):
-            return
+        popup = CTkMessagebox(title="Are you sure?", message="This will delete everything in the database.", icon="warning", options=["Format", "Cancel"])
+        result = popup.get()
+        if result.lower() != "delete": return
 
         # make sure that we are able to connect to the database
         if not self.check_db_connection(accept_postgres=True): return
@@ -1341,9 +1265,9 @@ class MainWindow:
         """fill the database with sample data"""
 
         # confirmation
-        self.popup_prompt("Populate the database?")
-        if not (self.prompt_response.lower() == "yes" or self.prompt_response.lower() == "confirm"):
-            return
+        popup = CTkMessagebox(title="Are you sure?", message="This will fill the database with junk data for testing.", icon="warning", options=["Populate", "Cancel"])
+        result = popup.get()
+        if result.lower() != "populate": return
 
         # make sure that we are able to connect to the database
         if not self.check_db_connection(accept_postgres=True): return
@@ -1364,18 +1288,13 @@ class MainWindow:
 
         popup = CTkMessagebox(message="Return part "+self.controller.part_num_from_upc(self.selected_part_key)+"?", title="Are you sure?", options=["Yes", "Cancel"], icon="question")
         response = popup.get()
-        if response != "Yes":
-            print("user picked no")
-            return
+        if response != "Yes": return
 
         if self.previous_screen == "kiosk": self.raise_kiosk()
 
         # database checkin
         upc = self.selected_part_key  # self.checkin_barcode.get()
         result = self.controller.part_checkin(upc)
-
-        # clear the entry box
-        self.checkin_barcode.delete("0", "end")
 
         # relay the database message
         if "success" in result.lower():
@@ -1389,6 +1308,7 @@ class MainWindow:
     @handle_exceptions
     def checkout_continue(self, *_, auto_select=None):
         """check out a part. Was originally the second step after scanning the part code"""
+        print("checkout continue!")
 
         # if a part is not selected, you can't check out
         if not self.selected_part_key:
@@ -1398,8 +1318,8 @@ class MainWindow:
         # check for database connection
         if not self.check_db_connection(): return
 
+        # get the upc from the entry and make sure it's in the database
         upc = self.selected_part_key
-
         if not self.controller.upc_exists(upc):
             self.popup_msg("UPC code not found in database")
             return
@@ -1408,8 +1328,10 @@ class MainWindow:
         self.checkout_update_search()
         self.force_prompt.pack_forget()
         self.checkout_user_search.delete("0", "end")
-        self.checkout_upc = self.checkout_barcode.get()
-        self.checkout_barcode.delete("0", "end")
+
+        # deselect the user
+        self.checkout_finalize_button.configure(**button_disable)
+        self.checkout_message.configure(text="No account selected.")
 
         if auto_select: self.checkout_user_select(auto_select)
 
@@ -1432,7 +1354,7 @@ class MainWindow:
         self.kiosk_check_upc()
         self.kiosk_next_step.place_forget()
         self.kiosk_message.place_forget()
-
+        self.back_to_checkout = True
         self.kiosk_frame.tkraise()
         self.kiosk_entry.focus()
         self.previous_screen = "kiosk"
@@ -1444,9 +1366,9 @@ class MainWindow:
         # clear out the input box
         self.manage_search_box.configure(text="No Part Selected")
 
-        # try again to connect to the database
-        if (not self.controller) or self.controller.cursor_exists():
-            self.db_connect()
+        # try again to connect to the database (why is this in the raise_manage function? does this need to be here?)
+        # if (not self.controller) or self.controller.cursor_exists():
+        #     self.db_connect()
 
         # make sure the search mode is valid
         if search_type.lower() in ["user", "part"]:
@@ -1503,10 +1425,6 @@ class MainWindow:
             self.check_in_out_frame.pack_forget()
             self.thin_frame.grid_forget()
 
-        print("search box before config:", self.search_box.get())
-        # self.search_box.configure(placeholder_text=f"Search for a {self.search_mode}")
-        print("search box after config:", self.search_box.get())
-
         # clear leftover data
         self.search_box.delete("0", "end")
         self.clear_output_box()
@@ -1541,19 +1459,11 @@ class MainWindow:
         for index, part in enumerate(parts):
             if part.isnumeric():  # parts
                 button_text = names_dict[part]
-                print("button_text:", button_text)
                 name_text = list_button_format(button_text, self.search_mode) if list(part)[0] != "No matching items" else "No matching items"
             else:  # users
-                # name_text = str(names_dict[part])
-                print("names dict:", names_dict)
-                print("part:", part)
-                print("names dict[part]:", names_dict[part])
                 name_text = list_button_format(names_dict[part], "user")
 
             name_text = name_text.strip(" ")
-            print("name_text[0]:",name_text[0])
-            print("name_text:",name_text)
-            print('name_text.split(" ")[0]:',name_text.split(" ")[0])
 
             part_widget = ButtonWithVar(
                 master=self.result_parts,
@@ -1563,10 +1473,7 @@ class MainWindow:
                 hover=not part == "No matching items",
                 font=listbutton_font, anchor="w",
                 command=lambda i=index, p=str(part): self.list_button_select(i, p),
-                text_color="#afe3ac" if name_text.split(" ")[0] == "Available" else "#dce1ee"    # white + green
-                # text_color="#dce1ee" if name_text[0] == "☑" else "#edadad"  # red   + white
-                # text_color="#afe3ac" if name_text[0] == "☑" else "#edadad"  # red   + green
-
+                text_color="#afe3ac" if name_text.split(" ")[0] == "Available" else "#dce1ee"
             )
             part_widget.pack(fill="x", expand=True)
             self.part_widgets.append(part_widget)
@@ -1594,6 +1501,7 @@ class MainWindow:
         try:
             button = self.part_widgets[button_index]
         except Exception:     # who knows what could happen with this one
+            #                   what does that mean???
             return
 
         if database_key.lower() == "no matching items": return
@@ -1607,7 +1515,6 @@ class MainWindow:
         # get the info for the selected part
         if self.search_mode == "part":
             part_info = self.controller.part_data(database_key)
-            print("part info got")
         else:
 
             # if the database key given is a name, convert it to a user id
@@ -1634,7 +1541,6 @@ class MainWindow:
 
         # make a holder for the content
         for key, value in part_info.items():
-            print(f"\tkey: {key}, \tvalue: {value}")
             # generate a frame to put the item and text side by side
             item_frame = ctk.CTkFrame(self.output_box, fg_color="transparent")
 
@@ -1667,7 +1573,6 @@ class MainWindow:
 
             # jump to reference button
             if key.lower() == "currently checked out by" and value.lower() != "not checked out":
-                print("value set:", value.split("(")[1][:-1])
                 self.make_link_button(item_frame, value.split("(")[1][:-1])
 
             # save the item frame to a list so that we can draw everything at the same time
