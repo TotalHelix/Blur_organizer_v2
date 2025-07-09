@@ -7,7 +7,7 @@ import customtkinter as ctk
 from sys import exit
 import requests
 from PIL import ImageFont, Image
-from db_interactions import Organizer, get_location
+from db_interactions import Organizer
 import psycopg2.errors as p2er
 from re import compile, split as re_split
 from webbrowser import open as web_open
@@ -170,7 +170,6 @@ class ButtonWithVar(ctk.CTkButton):
 class MainWindow:
     """The whole window that does all of everything"""
     def __init__(self, db_name):
-        get_location()
 
         # database credentials
         self.db_name = db_name
@@ -207,11 +206,11 @@ class MainWindow:
         side_buttons = {
             # these have to be lambda again because the frames haven't been defined yet.
             "Home": self.raise_home_frame,
+            "Kiosk Mode": lambda: self.raise_kiosk(),
             "Part Search": lambda: self.raise_search("part"),
             "User Search": lambda: self.raise_search("user"),
             "Manage Parts": lambda: self.raise_manage("part"),
-            "Manage Users": lambda: self.raise_manage("user"),
-            "Kiosk Mode": lambda: self.raise_kiosk()
+            "Manage Users": lambda: self.raise_manage("user")
         }
         for button_name, cmd in side_buttons.items():
             button = ctk.CTkButton(l_col, text=button_name, command=cmd)
@@ -1105,7 +1104,11 @@ class MainWindow:
         if self.form_mode_add:
             try:
                 if self.search_mode == "part":
-                    result = self.controller.add_part(fields[3], *fields[:3], *fields[4:])
+                    print("fields:")
+                    for i, field in enumerate(fields): print(f"fields[{i}]: {field}")
+                    # desc, mfr_name, mfr_pn, placement="None", url="None"
+                    # why is this like this? this is probably the lease modular way to do this possible. TODO make this better please!
+                    result = self.controller.add_part(fields[2], fields[0], fields[1], url=fields[3])
                 else:
                     result = self.controller.add_user(*fields)
 

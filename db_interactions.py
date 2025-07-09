@@ -29,7 +29,7 @@ def get_location():
     If no location file exists the current hostname is set as the new locatoin. This can be changed in Danger Zone."""
     try:
         with open(kiosk_path, "r") as kiosk:
-            return kiosk.read()[:-1]
+            return kiosk.read()
     except FileNotFoundError:
         new_name = gethostname()
         set_location(new_name)
@@ -774,8 +774,6 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr}"""
             else:
                 break
 
-        # capitalize the placement
-        placement = placement.upper()
         # make apostrophes safe
         safe_desc = desc.replace("'", "''")
         safe_mfr_pn = mfr_pn.replace("'", "''")
@@ -831,6 +829,7 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr_id}""
                 checkin_sql = f"DELETE FROM part_locations WHERE checked_out_part = {upc}"
                 self.cursor.execute(checkin_sql)
 
+                self.update_location(upc)
                 self.conn.commit()
                 return "Part successfully returned."
             else:
@@ -861,23 +860,19 @@ Please click "Add part" to add a part for the first time"""
         self.cursor.execute(update_sql)
         self.conn.commit()
 
-    def part_checkout(self, part_id, user_id, force=False):
+    def part_checkout(self, part_upc, user_id, force=False):
         """add the part to the currently checked out parts table"""
 
         # first: check if there is a matching part
-        find_part_sql = f"SELECT * FROM parts where part_upc = {part_id}"
+        find_part_sql = f"SELECT * FROM parts where part_upc = {part_upc}"
         self.cursor.execute(find_part_sql)
 
-        # if len(self.cursor.fetchall()) <= 0:
-        #     gui_window.confirm("This upc code does not belong to a known part")
-        #     return
-
         # check if the value already exists
-        search_sql = f"SELECT current_holder FROM part_locations WHERE checked_out_part = {part_id}"
+        search_sql = f"SELECT current_holder FROM part_locations WHERE checked_out_part = {part_upc}"
         self.cursor.execute(search_sql)
         results_table = self.cursor.fetchall()
 
-        # if results are found
+        # if the part is already checked out
         if len(results_table) > 0:
             # find the old userid in the users table
             old_user_sql = f"SELECT first_name, last_name FROM users WHERE user_id = '{results_table[0][0]}'"
@@ -895,18 +890,26 @@ Please click "Add part" to add a part for the first time"""
                 update_sql = f"""
 UPDATE part_locations 
 SET current_holder = '{user_id}', checkout_timestamp = CURRENT_TIMESTAMP 
-WHERE checked_out_part = {part_id}"""
+WHERE checked_out_part = {part_upc}"""
                 self.cursor.execute(update_sql)
 
                 # have a nice day
+                self.update_location(part_upc)
                 return "-CHECKOUT_SUCCESS-"
-        # if no results are found
+
+        # if the part isn't checked out already
         else:
             # sql to add the row
-            insert_sql = f"INSERT INTO part_locations VALUES ({part_id}, '{user_id}', CURRENT_TIMESTAMP)"
+            insert_sql = f"INSERT INTO part_locations VALUES ({part_upc}, '{user_id}', CURRENT_TIMESTAMP)"
             self.cursor.execute(insert_sql)
 
+            self.update_location(part_upc)
             return "-CHECKOUT_SUCCESS-"
+
+    def update_location(self, upc_to_update):
+        """update the part location to the current kiosk location of this kiosk"""
+        update_sql = f"UPDATE parts SET part_placement = '{get_location()}' WHERE parts.part_upc = {upc_to_update}"
+        self.cursor.execute(update_sql)
 
     def add_user(self, f_name, l_name, email):
         """create a new user and return the userid"""
