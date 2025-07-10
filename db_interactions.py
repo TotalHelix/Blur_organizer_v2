@@ -38,6 +38,9 @@ def get_location():
 
 def set_location(new_name):
     """Set a new name to appear when parts are checked out from this device"""
+    # make apostrophes (') safe
+    new_name = new_name.replace("'", "''")
+
     with open(kiosk_path, "w") as kiosk:
         kiosk.write(new_name)
 

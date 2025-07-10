@@ -7,7 +7,7 @@ import customtkinter as ctk
 from sys import exit
 import requests
 from PIL import ImageFont, Image
-from db_interactions import Organizer
+from db_interactions import Organizer, set_location
 import psycopg2.errors as p2er
 from re import compile, split as re_split
 from webbrowser import open as web_open
@@ -617,7 +617,43 @@ class MainWindow:
             # self.window.state("zoomed")
 
     def change_location(self):
-        print("yeah this doesn't work yet")
+        change_location_popup = ctk.CTk()
+        change_location_popup.title("New Location Name")
+        change_location_popup.geometry("550x220")
+        change_location_popup.resizable(False, False)
+
+        ctk.CTkLabel(change_location_popup, text="What should this location be called?", font=subtitle).pack(pady=20, padx=20)
+        location_var = ctk.StringVar(change_location_popup, value="")
+        location_entry = ctk.CTkEntry(change_location_popup, textvariable=location_var, width=200, height=30)
+        location_entry.pack(pady=20)
+        location_entry.focus()
+
+        def submit_location():
+            new_location = location_var.get()
+            set_location(new_location)
+            change_location_popup.destroy()
+            self.popup_msg(popup_type="success", error_text=f"Location successfully changed to {new_location}.")
+
+        button_frame = ctk.CTkFrame(change_location_popup, fg_color="transparent")
+        buttons = [
+            {
+                "text": "Submit",
+                "command": submit_location,
+                "grid-column": 0
+            },
+            {
+                "text": "Cancel",
+                "command": change_location_popup.destroy,
+                "grid-column": 1
+            }
+        ]
+
+        for button_data in buttons:
+            ctk.CTkButton(button_frame, text=button_data["text"], command=button_data["command"]).grid(row=0, column=button_data["grid-column"], padx=15)
+
+        button_frame.pack(pady=10)
+
+        change_location_popup.mainloop()
 
     def create_user(self):
         self.search_mode = "user"
