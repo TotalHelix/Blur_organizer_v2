@@ -22,6 +22,13 @@ from names import get_first_name, get_last_name
 file_location = os.getenv("APPDATA") + "\\Blur_Part_Organizer\\"
 kiosk_location_name_file = "kiosk_name.txt"
 kiosk_path = file_location + kiosk_location_name_file
+params = {
+    'database': 'postgres',
+    'user': 'postgres',
+    'password': 'blur4321',
+    'host': '172.20.61.86',
+    'port': 5432
+}
 
 
 def get_location():
@@ -178,25 +185,15 @@ def strip_string(string_text):
 
 
 class Organizer:
-    def __init__(self, user="", password="blur4321", dbname="parts_organizer_db"):
+    def __init__(self, conn_type="local", conn_info=None):
         """connect to a database and return the connection"""
 
-        # I should have done this earlier
-        self.db_name = dbname
+        self.conn_type = conn_type
 
-        # default user
-        if user == "":
-            user = f"customer_{dbname}"
+        # default
+        if not conn_info: conn_info = {"dbname": "blur_organizer_db", "user": None, "password": "blur4321"}
 
-        # if the user is trying to set up the database, connect to the postgres database
-        if user == "postgres":
-            self.conn = connect(
-                f"user=postgres password=blur4321"
-            )
-        else:
-            self.conn = connect(
-                f"dbname={dbname} user={user} password={password}"
-            )
+        self.db_connect()
 
         self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
@@ -213,6 +210,9 @@ class Organizer:
         self.conn.commit()
         self.cursor.close()
         self.conn.close()
+
+    def db_connect(self, privilege="customer"):
+        """privilege will either be "customer" or "postgres" """
 
     def userid_exists(self, userid):
         """check if the userid specified exists in the database"""

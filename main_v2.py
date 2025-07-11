@@ -13,6 +13,24 @@ global select_db_var
 global selector_window
 global options_menu
 
+
+"""
+OK this is how the db_dict works:
+
+Display Name: {
+    "type": "local",
+    "connection name": postgreSQL database name
+}, 
+
+Display Name: {
+    "type": "remote",
+    "connection data": {
+        kwargs username, database name, port, ip, password
+    }
+}
+"""
+
+
 # json of remembered databases
 json_location = os.getenv("APPDATA") + "\\Blur_Part_Organizer\\"  # if you're changing this remember to change the one in db_interactions.py as well.
 json_file_name = "saved_databases.json"
@@ -85,11 +103,10 @@ def db_add_gui(edit_mode=False, add_db_name=""):
         # make sure a valid db has been selected
         print(f"part_to_edit not in list(db_dict.keys()): {part_display not in list(db_dict.keys())}")
         print(f"part_to_edit: {part_display}, list(db_dict.keys()): {list(db_dict.keys())}")
-        if edit_mode and part_display not in list(db_dict.keys()): return
+        if part_display not in list(db_dict.keys()): return
 
         part_database = db_dict[part_display]
-        part_to_edit = [part_display, part_database]
-        fill_text = part_to_edit
+        fill_text = [part_display, part_database]
 
     else:
         fill_text = ["", add_db_name]
@@ -214,15 +231,17 @@ def update_options(display_name=None, db_name=None, old_display_name=None):
     """
     global db_dict
 
-    print(f"started with old_display_name of \"{old_display_name}\"")
+    # if a valid display name and database name exist
     if display_name and db_name:
-        print(f"accepted entries {display_name} and {db_name}.")
+
+        # if there is an old database to delete (e.g. we're editing)
         if old_display_name:
-            print("deleting old part" + old_display_name)
             del db_dict[old_display_name]
 
-        db_dict[display_name] = db_name
-        print(f"added new entry \"{display_name}\": \"{db_name}\"")
+        db_dict[display_name] = {
+            "type": "local",
+            "connection name": db_name
+        }
 
     options_menu.configure(values=list(db_dict.keys()))
 
@@ -275,7 +294,6 @@ def database_selector():
 
 def connect_existing():
     """Connect to a postgres database that already exists"""
-    print("Hey guys! 🐶")
 
     # list default
     db_list = ["No Databases Found"]
@@ -294,19 +312,70 @@ def connect_existing():
     db_con_window.title("Existing database to add")
     db_con_window.resizable(False, False)
 
+    # subtitle message for local databases
+    ctk.CTkLabel(db_con_window, text="Connect to a local database").pack(padx=30, pady=6)
+
     # frame to hold all the databases
     db_disp_frame = ctk.CTkScrollableFrame(db_con_window)
     for db_name in db_list:
         new_button = ctk.CTkButton(db_disp_frame, text=db_name, fg_color="transparent", command=lambda n=db_name: db_add_gui(add_db_name=n))
 
         new_button.pack()
-    db_disp_frame.pack(padx=13, pady=13)
+    db_disp_frame.pack(padx=13, pady=7)
 
     # Done button
     ctk.CTkButton(db_con_window, text="Done", command=db_con_window.destroy).pack(pady=13)
 
+    # subtitle message for remote databases
+    edge = "-"*25
+    ctk.CTkLabel(db_con_window, text=edge+" OR "+edge).pack(padx=50)
+    ctk.CTkButton(db_con_window, text="Remote Database", command=lambda w=db_con_window: remote_con_options(w)).pack(padx=30, pady=12)
+
     # start the window
     db_con_window.mainloop()
+
+
+def remote_con_options(connect_window):
+    remote_add_window = ctk.CTk()
+    fields = ["IP Address", "Port", "Username", "Password", "Database Name", "Display Name"]  # if you're changing these remember to change their ref in add_remote() as well!
+    field_responses = {}
+
+    for field in fields:
+        # the frame to hold it
+        long_frame = ctk.CTkFrame(remote_add_window, fg_color="transparent")
+        long_frame.pack(pady=7)
+
+        # make the variable for the entry
+        string_var = ctk.StringVar(long_frame, value="")
+        field_responses[field] = string_var
+
+        # The label and entry box
+        ctk.CTkLabel(long_frame, text=field, width=150).grid(row=0, column=0)
+        ctk.CTkEntry(long_frame, textvariable=string_var).grid(row=0, column=1, padx=20)
+
+    ctk.CTkButton(remote_add_window, text="Connect", command=lambda: add_remote(field_responses, [remote_add_window, connect_window])).pack(pady=10)
+
+    remote_add_window.mainloop()
+
+
+def add_remote(entries_list, windows_to_close):
+    """Add a remote connection to the dictionary from the list of entries that we have."""
+    global db_dict
+
+    display_name = entries_list.pop("Display Name").get()
+    db_dict[display_name] = {
+        "type": "remote",
+        "connection_data": {
+            "database": entries_list["Database Name"].get(),
+            "user": entries_list["Username"].get(),
+            "password": entries_list["Password"].get(),
+            "host": entries_list["IP Address"].get(),
+            "port": entries_list["Port"].get()
+        }
+    }
+
+    for window in windows_to_close: window.destroy()
+    select_db_var.set(display_name)
 
 
 if __name__ == "__main__":
@@ -321,9 +390,15 @@ if __name__ == "__main__":
     if selected_database in list(db_dict.keys()):
         database = db_dict[selected_database]
         print(f"{selected_database} is the key for {database}! Launching {database}...")
-        app = MainWindow(db_name=database)
 
-        app.window.mainloop()
+        # if it's a local postgresql database
+        if database["type"] == "local":
+            app = MainWindow(db_name=database["connection name"])
+            app.window.mainloop()
+
+        # if it's a remote database
+        elif database["type"] == "remote":
+            print("remote connection to database.")
     else:
         print(f"{selected_database} wasn't a key in the database dict")
         # you fail
