@@ -188,22 +188,26 @@ class Organizer:
     def __init__(self, conn_type="local", conn_info=None):
         """connect to a database and return the connection"""
 
+        # default connection info
+        if not conn_info: conn_info = {"database": "blur_organizer_db", "user": None, "password": "blur4321"}
+
+        # define some variables
+        self.db_name = conn_info["database"]
         self.conn_type = conn_type
+        self.conn_info = conn_info
+        self.conn = None
+        self.cursor = None
 
-        # default
-        if not conn_info: conn_info = {"dbname": "blur_organizer_db", "user": None, "password": "blur4321"}
-
+        # self.conn and self.cursor are set in self.db_connect()
+        print("about to db connect")
         self.db_connect()
+        print("db connected")
 
         self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
 
-        # set up the connection and cursor, this is how we talk to the database
-        self.cursor = self.conn.cursor()
-
-    def __enter__(self, user=""):
-        # I don't remember what the point of this was...
-        # better keep it just in case
-        if user == "": user = f"customer_{self.db_name}"
+    def __enter__(self, user=None):
+        # This is here for the purpose of being able o say "with Organizer()" instead of creating a new Organizer.
+        if not user: user = f"customer_{self.db_name}"
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -213,6 +217,13 @@ class Organizer:
 
     def db_connect(self, privilege="customer"):
         """privilege will either be "customer" or "postgres" """
+
+        # if this is local database
+        print(f"about to invoke postgres. conn info: {self.conn_info}")
+        self.conn = connect(**self.conn_info)
+        print("connection established. Starting cursor")
+        self.cursor = self.conn.cursor()
+        print("cursor established.")
 
     def userid_exists(self, userid):
         """check if the userid specified exists in the database"""
@@ -298,7 +309,7 @@ class Organizer:
         self.conn.close()
 
         # start a new connection
-        self.conn = connect(f"dbname={db_name} user=postgres password=blur4321")
+        self.conn = connect(f"database={db_name} user=postgres password=blur4321")
         self.cursor = self.conn.cursor()
 
         self.refresh_cursor()
@@ -467,7 +478,7 @@ CREATE TABLE public.{table}
         self.cursor.close()
         self.conn.commit()
         self.conn.close()
-        self.conn = connect(f"user=postgres password=blur4321 dbname={db_name}")
+        self.conn = connect(f"user=postgres password=blur4321 database={db_name}")
         self.cursor = self.conn.cursor()
 
         user_create = f"""
@@ -529,7 +540,7 @@ CREATE TABLE public.{table}
         self.cursor.close()
         self.conn.commit()
         self.conn.close()
-        self.conn = connect(f"dbname={db_name} user=customer_{db_name} password=blur4321")
+        self.conn = connect(f"database={db_name} user=customer_{db_name} password=blur4321")
         self.cursor = self.conn.cursor()
 
         # ----- fill out all the databases

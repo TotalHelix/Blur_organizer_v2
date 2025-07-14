@@ -19,13 +19,21 @@ OK this is how the db_dict works:
 
 Display Name: {
     "type": "local",
-    "connection name": postgreSQL database name
+    "connection data": {
+        "username": username,
+        "database": database name,
+        "password": password
+    }
 }, 
 
 Display Name: {
     "type": "remote",
     "connection data": {
-        kwargs username, database name, port, ip, password
+        "username": username, 
+        "database": database name, 
+        "port": port, 
+        "host": ip, 
+        "password": password
     }
 }
 """
@@ -240,7 +248,11 @@ def update_options(display_name=None, db_name=None, old_display_name=None):
 
         db_dict[display_name] = {
             "type": "local",
-            "connection name": db_name
+            "connection data": {
+                "database": db_name,
+                "password": "blur4321",
+                "user": "postgres"
+            }
         }
 
     options_menu.configure(values=list(db_dict.keys()))
@@ -300,7 +312,7 @@ def connect_existing():
 
     # try to get databases
     try:
-        with Organizer(user="postgres") as pg:
+        with Organizer(conn_type="local", conn_info={"dbname": "postgres", "user": "postgres", "password": "blur4321"}) as pg:
             db_list = [item[0] for item in pg.select_all_db()]
 
     # give an error message if we can't get a database
@@ -387,18 +399,13 @@ if __name__ == "__main__":
 
     print(f"selected database: {selected_database}")
 
+    # if the database is in the json file/dictionary
     if selected_database in list(db_dict.keys()):
-        database = db_dict[selected_database]
+        database = db_dict[selected_database]["connection data"]
         print(f"{selected_database} is the key for {database}! Launching {database}...")
 
-        # if it's a local postgresql database
-        if database["type"] == "local":
-            app = MainWindow(db_name=database["connection name"])
-            app.window.mainloop()
-
-        # if it's a remote database
-        elif database["type"] == "remote":
-            print("remote connection to database.")
+        app = MainWindow(conn_info=database)
+        app.window.mainloop()
     else:
         print(f"{selected_database} wasn't a key in the database dict")
         # you fail

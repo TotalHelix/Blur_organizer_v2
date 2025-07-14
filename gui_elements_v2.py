@@ -153,7 +153,7 @@ def handle_exceptions(func):
             return func(*args, **kwargs)
         except Exception as er:
 
-            args[0].popup_msg(str(er))
+            # args[0].popup_msg(str(er))
             raise er  # TODO: comment this out again when you deploy (it will crash the program (i think))
     return wrapper
 
@@ -169,10 +169,14 @@ class ButtonWithVar(ctk.CTkButton):
 
 class MainWindow:
     """The whole window that does all of everything"""
-    def __init__(self, db_name):
+    def __init__(self, conn_info):
 
+        print("conn info: "+str(conn_info))
         # database credentials
-        self.db_name = db_name
+        self.db_name = conn_info["database"]
+        self.conn_info = conn_info
+        self.customer_info = conn_info
+        self.customer_info["user"] = f"customer_{self.db_name}"
 
         # start the window (I know that your animations don't exist)
         self.window = ctk.CTk()
@@ -868,12 +872,16 @@ class MainWindow:
             warnings.warn("this should not be here!")
 
         try:
-            with Organizer("postgres", dbname=self.db_name) as _:
+            print("tyring to connect as admin")
+            with Organizer(conn_info=self.conn_info) as _:
+                print("connected as admin")
                 # we were able to access postgres
                 self.postgres_exists = True
 
             # now we should be able to connect as a customer with no problem
-            self.controller = Organizer(f"customer_{self.db_name}", dbname=self.db_name)
+            print("tyring to connect as customer")
+            self.controller = Organizer(conn_info=self.customer_info)
+            print("connected as customer")
 
             self.connection = True
         except p2er.OperationalError as error_msg:
@@ -1206,7 +1214,7 @@ class MainWindow:
     def reconnect_db(self):
         # make a connection to the database
         try:
-            self.controller = Organizer(f"customer_{self.db_name}", dbname=self.db_name)
+            self.controller = Organizer(conn_info=self.conn_info)
             self.connection = True
         except Exception as er:
             # raise er
@@ -1244,6 +1252,9 @@ class MainWindow:
 
     @handle_exceptions
     def check_db_connection(self, accept_postgres=False):
+        # try to connect to the database again
+        self.db_connect()
+
         if self.connection:
             return True
         elif self.postgres_exists:
@@ -1270,7 +1281,7 @@ class MainWindow:
         if not self.check_db_connection(accept_postgres=True): return
 
         # try to format the database as postgres
-        with Organizer("postgres", dbname=self.db_name) as postgres:
+        with Organizer(conn_info=self.conn_info) as postgres:
             postgres.drop_db(self.db_name)
         self.popup_msg("Database dropped successfully", "success")
 
@@ -1290,7 +1301,7 @@ class MainWindow:
 
         # try to format the database as postgres
         try:
-            with Organizer("postgres", dbname=self.db_name) as postgres:
+            with Organizer(conn_info=self.conn_info) as postgres:
                 postgres.format_database(self.db_name)
             self.popup_msg("Database formatted successfully", "success")
         except Exception as error:
@@ -1313,7 +1324,7 @@ class MainWindow:
 
         # try to format the database as postgres
         try:
-            with Organizer(f"customer_{self.db_name}", dbname=self.db_name) as postgres:
+            with Organizer(conn_info=self.customer_info) as postgres:
                 postgres.populate_db(self.db_name)
                 self.popup_msg("Database populated successfully", "success")
         except Exception as error:
