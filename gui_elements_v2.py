@@ -176,7 +176,7 @@ class MainWindow:
         self.db_name = conn_info["database"]
         self.conn_info = conn_info
         self.customer_info = conn_info
-        self.customer_info["user"] = f"customer_{self.db_name}"
+        # self.customer_info["user"] = f"customer_{self.db_name}"
 
         # start the window (I know that your animations don't exist)
         self.window = ctk.CTk()
@@ -1217,9 +1217,9 @@ class MainWindow:
             self.controller = Organizer(conn_info=self.conn_info)
             self.connection = True
         except Exception as er:
-            # raise er
             self.connection = False
             self.popup_msg(er)
+            raise er  # TODO comment this out
 
     @handle_exceptions
     def forget_popup(self, popup_id):
@@ -1294,20 +1294,27 @@ class MainWindow:
         # closing will count as a no, so one less way to accidentally nuke
         popup = CTkMessagebox(title="Are you sure?", message="This will delete everything in the database.", icon="warning", options=["Format", "Cancel"])
         result = popup.get()
-        if result.lower() != "delete": return
+        print("about to check result")
+        if result.lower() != "format": return
+        print("through")
 
         # make sure that we are able to connect to the database
         if not self.check_db_connection(accept_postgres=True): return
+        print("made it through db check")
 
         # try to format the database as postgres
         try:
             with Organizer(conn_info=self.conn_info) as postgres:
+                print("context established")
                 postgres.format_database(self.db_name)
+                print("database formated")
             self.popup_msg("Database formatted successfully", "success")
         except Exception as error:
+            print("something went wrong:", str(error))
             # self.popup_msg(str(error))
             raise error
         finally:
+            print('reconnecting')
             self.reconnect_db()
 
     @handle_exceptions
@@ -1329,6 +1336,7 @@ class MainWindow:
                 self.popup_msg("Database populated successfully", "success")
         except Exception as error:
             self.popup_msg(str(error))
+            raise error # TODO comment this out
 
     @handle_exceptions
     def checkin_continue(self, *_):
@@ -1550,9 +1558,9 @@ class MainWindow:
 
         try:
             button = self.part_widgets[button_index]
-        except Exception:     # who knows what could happen with this one
+        except Exception as error:     # who knows what could happen with this one
             #                   what does that mean???
-            return
+            raise error  # TODO do something about this
 
         if database_key.lower() == "no matching items": return
 

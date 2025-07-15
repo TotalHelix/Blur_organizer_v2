@@ -312,12 +312,13 @@ def connect_existing():
 
     # try to get databases
     try:
-        with Organizer(conn_type="local", conn_info={"dbname": "postgres", "user": "postgres", "password": "blur4321"}) as pg:
+        with Organizer(conn_type="local", conn_info={"database": "postgres", "user": "postgres", "password": "blur4321"}) as pg:
             db_list = [item[0] for item in pg.select_all_db()]
 
     # give an error message if we can't get a database
     except Exception as er:
         CTkMessagebox(title="Error", message="Something went wrong!\nError: "+str(er), option_1="OK", icon="cancel")
+        raise er  # TODO comment this one out too.
 
     # db selector window
     db_con_window = ctk.CTk()
@@ -377,7 +378,7 @@ def add_remote(entries_list, windows_to_close):
     display_name = entries_list.pop("Display Name").get()
     db_dict[display_name] = {
         "type": "remote",
-        "connection_data": {
+        "connection data": {
             "database": entries_list["Database Name"].get(),
             "user": entries_list["Username"].get(),
             "password": entries_list["Password"].get(),

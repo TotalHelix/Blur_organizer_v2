@@ -168,7 +168,7 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
             return "Invalid printer type. This is most likely an issue with the program.", code, placement, desc_text, printer
 
     except Exception as e:
-        raise e
+        raise e  # TODO this is not a useful exception...
 
 
 def random_word():
@@ -195,6 +195,8 @@ class Organizer:
         self.db_name = conn_info["database"]
         self.conn_type = conn_type
         self.conn_info = conn_info
+        self.postgres_info = self.conn_info
+        self.postgres_info["database"] = "postgres"
         self.conn = None
         self.cursor = None
 
@@ -203,11 +205,11 @@ class Organizer:
         self.db_connect()
         print("db connected")
 
-        self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        # self.cursor.execute("\\set autocommit on")
 
     def __enter__(self, user=None):
         # This is here for the purpose of being able o say "with Organizer()" instead of creating a new Organizer.
-        if not user: user = f"customer_{self.db_name}"
+        # if not user: user = f"customer_{self.db_name}"
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -215,15 +217,22 @@ class Organizer:
         self.cursor.close()
         self.conn.close()
 
-    def db_connect(self, privilege="customer"):
+    def db_connect(self, new_connection_info=None):
         """privilege will either be "customer" or "postgres" """
 
+        if not new_connection_info: new_connection_info = self.conn_info
+
         # if this is local database
-        print(f"about to invoke postgres. conn info: {self.conn_info}")
-        self.conn = connect(**self.conn_info)
-        print("connection established. Starting cursor")
-        self.cursor = self.conn.cursor()
-        print("cursor established.")
+        print(f"about to invoke postgres. conn info: {new_connection_info}")
+        try:
+            self.conn = connect(**new_connection_info)
+            print("connection established. Starting cursor")
+            self.cursor = self.conn.cursor()
+            self.conn.autocommit = True
+            self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+            print("cursor established.")
+        except Exception as error:
+            print(str(error))
 
     def userid_exists(self, userid):
         """check if the userid specified exists in the database"""
@@ -276,13 +285,24 @@ class Organizer:
         self.refresh_cursor()
 
         # drop database
+        self.conn.commit()
+        print("inside db drop func")
         drop_db = f"DROP DATABASE {db_name};"
         self.cursor.execute(drop_db)
+        self.conn.commit()
+        print("hey it worked")
 
         self.conn.commit()
 
     def format_database(self, db_name):
         """set up all the tables of the database"""
+        print("format called")
+        self.cursor.close()
+        self.conn.commit()
+        self.conn.close()
+
+        self.db_connect(new_connection_info=self.postgres_info)
+        print("established as postgres")
 
         # find out if the database already exists and needs to be dropped
         # this could probably be done in sql, but is simpler to do in python
@@ -293,7 +313,10 @@ class Organizer:
         if db_name in [name[0] for name in self.cursor.fetchall()]:
             print("there was a database in there")
 
+            print("about to drop db")
             self.drop_db(db_name)
+            print("dropped db")
+        print("after db drop")
 
         # create a new database
         new_db_sql = f"CREATE DATABASE {db_name};"
@@ -303,17 +326,7 @@ class Organizer:
         self.disconnect_customer()
 
         # ----- now that the right database exists, let's connect to it
-        # close the old connection
-        self.cursor.close()
-        self.conn.commit()
-        self.conn.close()
 
-        # start a new connection
-        self.conn = connect(f"database={db_name} user=postgres password=blur4321")
-        self.cursor = self.conn.cursor()
-
-        self.refresh_cursor()
-        # table of database layout
         # i swear if I have to do anything else with this table i'm going to turn it into a spreadsheet
         tables_setup = {
             "users":
@@ -377,6 +390,7 @@ CREATE TABLE public.{table}
                         if elem[0] == source_path[1]:
                             source = elem
                             break
+                print("\t2")
 
                 # add the date type
                 create_command += f" {source[1]}"
@@ -403,6 +417,7 @@ CREATE TABLE public.{table}
             # chop off the last comma and close the command
             create_command = create_command[:-2] + "\n);"
 
+            print("\t3")
             print(create_command)
 
             self.cursor.execute(create_command)
@@ -478,10 +493,12 @@ CREATE TABLE public.{table}
         self.cursor.close()
         self.conn.commit()
         self.conn.close()
-        self.conn = connect(f"user=postgres password=blur4321 database={db_name}")
-        self.cursor = self.conn.cursor()
+        self.db_connect(new_connection_info=self.postgres_info)
 
         user_create = f"""
+        REASSIGN OWNED BY customer_{db_name} TO postgres;
+        DROP OWNED BY customer_{db_name};
+        
         DROP ROLE IF EXISTS customer_{db_name};
         CREATE ROLE customer_{db_name}  WITH
             LOGIN
@@ -540,8 +557,7 @@ CREATE TABLE public.{table}
         self.cursor.close()
         self.conn.commit()
         self.conn.close()
-        self.conn = connect(f"database={db_name} user=customer_{db_name} password=blur4321")
-        self.cursor = self.conn.cursor()
+        self.db_connect()
 
         # ----- fill out all the databases
 
