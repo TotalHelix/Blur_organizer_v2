@@ -7,7 +7,7 @@ import customtkinter as ctk
 from sys import exit
 import requests
 from PIL import ImageFont, Image
-from db_interactions import Organizer, set_location
+from db_interactions import Organizer, set_location, db_err
 import psycopg2.errors as p2er
 from re import compile, split as re_split
 from webbrowser import open as web_open
@@ -153,7 +153,7 @@ def handle_exceptions(func):
             return func(*args, **kwargs)
         except Exception as er:
 
-            # args[0].popup_msg(str(er))
+            args[0].popup_msg(str(er))
             raise er  # TODO: comment this out again when you deploy (it will crash the program (i think))
     return wrapper
 
@@ -176,7 +176,8 @@ class MainWindow:
         self.db_name = conn_info["database"]
         self.conn_info = conn_info
         self.customer_info = conn_info
-        # self.customer_info["user"] = f"customer_{self.db_name}"
+        self.customer_info["user"] = f"customer_{self.db_name}"
+        self.customer_info["password"] = "blur4321"
 
         # start the window (I know that your animations don't exist)
         self.window = ctk.CTk()
@@ -1214,12 +1215,12 @@ class MainWindow:
     def reconnect_db(self):
         # make a connection to the database
         try:
-            self.controller = Organizer(conn_info=self.conn_info)
+            self.controller = Organizer(conn_info=self.customer_info)
             self.connection = True
         except Exception as er:
             self.connection = False
             self.popup_msg(er)
-            raise er  # TODO comment this out
+            raise er
 
     @handle_exceptions
     def forget_popup(self, popup_id):
@@ -1311,7 +1312,7 @@ class MainWindow:
             self.popup_msg("Database formatted successfully", "success")
         except Exception as error:
             print("something went wrong:", str(error))
-            # self.popup_msg(str(error))
+            self.popup_msg(str(error))
             raise error
         finally:
             print('reconnecting')
@@ -1331,12 +1332,12 @@ class MainWindow:
 
         # try to format the database as postgres
         try:
-            with Organizer(conn_info=self.customer_info) as postgres:
+            with Organizer(conn_info=self.conn_info) as postgres:
                 postgres.populate_db(self.db_name)
                 self.popup_msg("Database populated successfully", "success")
         except Exception as error:
             self.popup_msg(str(error))
-            raise error # TODO comment this out
+            raise error  # TODO comment this out
 
     @handle_exceptions
     def checkin_continue(self, *_):
@@ -1504,9 +1505,12 @@ class MainWindow:
 
         search = self.search_box.get()
         if self.search_mode == "part":
-            parts = self.controller.part_search(search)
-            names_dict = {part[2]: tuple(part) for part in parts}
-            parts = [part[2] for part in parts]
+            try:
+                parts = self.controller.part_search(search)
+                names_dict = {part[2]: tuple(part) for part in parts}
+                parts = [part[2] for part in parts]
+            except db_err.UndefinedTable:
+                raise Exception("The database doesn't look like how we expected.\nIf the database hasn't been formatted try hitting \"Format\" in the Danger Zone tab.")
         elif self.search_mode == "user":
             names_dict = self.controller.user_search(search, use_full_names=True)
             parts = list(names_dict.keys())

@@ -8,7 +8,7 @@ from zebra import Zebra
 
 # database
 from psycopg2 import connect
-import psycopg2.errors
+from psycopg2 import errors as db_err
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from datetime import date, datetime
 from socket import gethostname
@@ -728,7 +728,7 @@ UPDATE manufacturers SET number_of_parts = {unique_id} WHERE mfr_id = {mfr}"""
         # try to delete
         try:
             self.cursor.execute(f"DELETE FROM {location[0]} WHERE {location[1]} = '{key}'")
-        except psycopg2.errors.ForeignKeyViolation:
+        except db_err.ForeignKeyViolation:
             return "-PARTS_STILL_CHECKED_OUT-"
 
         self.conn.commit()
