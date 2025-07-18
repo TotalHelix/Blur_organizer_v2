@@ -134,41 +134,37 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
     # return
 
     # print the label
-    try:
-        # print to zebra printer
-        if "zebra" in printer.lower():
-            # generate the command
-            zpl_command = label.dumpZPL()
-            print(zpl_command)
+    # print to zebra printer
+    if "zebra" in printer.lower():
+        # generate the command
+        zpl_command = label.dumpZPL()
+        print(zpl_command)
 
-            # get the printer
-            z = Zebra()
-            print(printer)
+        # get the printer
+        z = Zebra()
+        print(printer)
 
-            # set the printer queue
-            all_queues = z.getqueues()
-            zsb_queues = [queue for queue in all_queues if "zsb" in queue.lower()]
+        # set the printer queue
+        all_queues = z.getqueues()
+        zsb_queues = [queue for queue in all_queues if "zsb" in queue.lower()]
 
-            for zsb_queue in zsb_queues:
-                try:
-                    z.setqueue(zsb_queue)
+        for zsb_queue in zsb_queues:
+            try:
+                z.setqueue(zsb_queue)
 
-                    # Output the ZPL command to the printer
-                    z.output(zpl_command)
+                # Output the ZPL command to the printer
+                z.output(zpl_command)
 
-                    print(f"Print job sent to {zsb_queue}.")
-                except pywintypes.error:
-                    print(f"Print failed on {zsb_queue}.")
+                print(f"Print job sent to {zsb_queue}.")
+            except pywintypes.error:
+                print(f"Print failed on {zsb_queue}.")
 
-        elif "preview" in printer.lower():
-            label.preview()
+    elif "preview" in printer.lower():
+        label.preview()
 
-        # invalid printer type
-        else:
-            return "Invalid printer type. This is most likely an issue with the program.", code, placement, desc_text, printer
-
-    except Exception as e:
-        raise e  # TODO this is not a useful exception...
+    # invalid printer type
+    else:
+        return "Invalid printer type. This is most likely an issue with the program.", code, placement, desc_text, printer
 
 
 def random_word():

@@ -154,7 +154,7 @@ def handle_exceptions(func):
         except Exception as er:
 
             args[0].popup_msg(str(er))
-            raise er  # TODO: comment this out again when you deploy (it will crash the program (i think))
+            # raise er
     return wrapper
 
 
@@ -1331,13 +1331,9 @@ class MainWindow:
         if not self.check_db_connection(accept_postgres=True): return
 
         # try to format the database as postgres
-        try:
-            with Organizer(conn_info=self.conn_info) as postgres:
-                postgres.populate_db(self.db_name)
-                self.popup_msg("Database populated successfully", "success")
-        except Exception as error:
-            self.popup_msg(str(error))
-            raise error  # TODO comment this out
+        with Organizer(conn_info=self.conn_info) as postgres:
+            postgres.populate_db(self.db_name)
+            self.popup_msg("Database populated successfully", "success")
 
     @handle_exceptions
     def checkin_continue(self, *_):
@@ -1560,11 +1556,7 @@ class MainWindow:
 
         if (not button_index) and button_index != 0: return
 
-        try:
-            button = self.part_widgets[button_index]
-        except Exception as error:     # who knows what could happen with this one
-            #                   what does that mean???
-            raise error  # TODO do something about this
+        button = self.part_widgets[button_index]
 
         if database_key.lower() == "no matching items": return
 
