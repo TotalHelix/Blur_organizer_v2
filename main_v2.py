@@ -1,4 +1,6 @@
 import json
+import shutil
+import requests
 from gui_elements_v2 import MainWindow, ctk, Organizer, CTkMessagebox
 import os
 import lorem
@@ -40,7 +42,7 @@ Display Name: {
 
 
 # json of remembered databases
-json_location = os.getenv("APPDATA") + "\\Blur_Part_Organizer\\"  # if you're changing this remember to change the one in db_interactions.py as well.
+json_location = os.getenv("APPDATA") + "\\Blur_Part_Organizer\\"  # if you're changing this remember to change the ones in the other files as well.
 json_file_name = "saved_databases.json"
 json_path = json_location+json_file_name
 if os.path.exists(json_path):
@@ -391,7 +393,40 @@ def add_remote(entries_list, windows_to_close):
     select_db_var.set(display_name)
 
 
+def setup():
+    """Pull important resources from the cloud to the local machine.
+    Right now this is just images for image buttons."""
+    resources_path = json_location+"\\resources\\"
+
+    # if this path doesn't exist yet, create the resources folder
+    if not os.path.exists(resources_path):
+        os.makedirs(resources_path)
+
+    remote_resources_path = "https://github.com/TotalHelix/Blur_organizer_v2/raw/main/images/"
+    things_to_download = [
+        "Check_Out.png",
+        "Check_Out_hover.png",
+        "Example Program Use.png",
+        "Return.png",
+        "Return_hover.png",
+        "Uncheck Stack Builder.png"
+    ]
+
+    for file in things_to_download:
+        # if the file already exists, we don't need to redownlaod it
+        if os.path.isfile(resources_path+file): continue
+
+        # get the image from github
+        image_data = requests.get(remote_resources_path+file, stream=True)
+
+        # write the image bytes file
+        with open(resources_path+file, "wb") as image_file:
+            shutil.copyfileobj(image_data.raw, image_file)
+
+
 if __name__ == "__main__":
+    setup()
+
     database_selector()
 
     # write to the json file

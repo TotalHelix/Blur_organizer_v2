@@ -1,4 +1,5 @@
 import math
+import os
 import warnings
 from os import remove as os_remove
 import tkinter as tk
@@ -385,11 +386,14 @@ class MainWindow:
         self.kiosk_next_step = ctk.CTkFrame(self.kiosk_frame, width=1000, height=500, fg_color="transparent")
 
         button_size = 250
+        image_root_path = os.getenv("APPDATA") + "\\Blur_Part_Organizer\\resources\\"
 
-        for col_num, image_path, command in (
-                (0, "images/Check_Out.png", self.checkout_continue),
-                (1, "images/Return.png", self.checkin_continue)
+        for col_num, image_name, command in (
+                (0, "Check_Out.png", self.checkout_continue),
+                (1, "Return.png", self.checkin_continue)
         ):
+            image_path = image_root_path + image_name
+
             image = ctk.CTkImage(Image.open(image_path), size=(button_size, button_size))
             hover_image = ctk.CTkImage(Image.open(image_path[:-4]+"_hover"+image_path[-4:]), size=(button_size, button_size))
 
