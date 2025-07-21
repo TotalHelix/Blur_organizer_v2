@@ -66,14 +66,14 @@ def find_common_elements(list_to_compare):
     return list(common_elements)
 
 
-def render_upc(code, placement, desc_text, printer="Zebra "):
+def render_upc(code, part_number, desc_text, printer="Zebra "):
     """
-    the new way to render upc codes using zebra zpl
+    the new (and somewhat janky) way to render upc codes using zebra zpl
     returns the error that took place when printing (or none)
     """
     # upc_new(code)
 
-    args = (code, placement, desc_text, printer)
+    args = (code, part_number, desc_text, printer)
     # generate a zpl command
 
     # change the code to a number
@@ -114,14 +114,14 @@ def render_upc(code, placement, desc_text, printer="Zebra "):
     label.write_text(desc, char_height=2, char_width=2, line_spaces=0, line_width=99, max_line=99)
     label.endorigin()
 
-    # write the word 'home' (placement)
+    # write the word 'part number'
     label.origin(29, 1)
-    label.write_text("HOME:", char_height=1, char_width=.5, font="F")
+    label.write_text("PART #:", char_height=1, char_width=.5, font="F")
     label.endorigin()
 
-    # write the placement
-    label.origin(37, 1.8)
-    label.write_text(placement, char_height=8, char_width=6)  # , font="H")
+    # write the part number
+    label.origin(31, 3.4)
+    label.write_text(part_number, char_height=6, char_width=6)  # , font="H")
     label.endorigin()
 
     # the horizontal divider
@@ -460,11 +460,11 @@ CREATE TABLE public.{table}
         return old_id
 
     def upc_create(self, code):
-        get_sql = f"SELECT part_placement, part_desc FROM parts WHERE part_upc = {code}"
+        get_sql = f"SELECT mfr_pn, part_desc FROM parts WHERE part_upc = {code}"
         self.cursor.execute(get_sql)
-        placement, desc = self.cursor.fetchall()[0]
+        pn, desc = self.cursor.fetchall()[0]
 
-        render_upc(code, placement, desc)
+        render_upc(code, pn, desc)
 
     def disconnect_customer(self):
         """drop all dependencies on the customer role"""
@@ -1094,8 +1094,6 @@ JOIN manufacturers ON parts.part_mfr = manufacturers.mfr_id
                 self.cursor.execute(f"SELECT first_name, last_name FROM part_locations JOIN users ON part_locations.current_holder = users.user_id WHERE checked_out_part = {row[0]}")
                 result = self.cursor.fetchall()
                 if result: result = " ".join(result[0])
-                # why_another_stage.append([*row, "✖" if result else "✔"])  # looks better but there's a stray pixel on the check ):
-                # why_another_stage.append([*row, chr(0x00A0) if result else "✓"])
                 why_another_stage.append([*row, f"Out ({result})" if result else "Available"])
 
             return [[u[1], u[2], u[0], u[3], u[4], u[5], u[6]] for u in why_another_stage]

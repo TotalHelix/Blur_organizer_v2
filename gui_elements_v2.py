@@ -26,6 +26,7 @@ listbutton_font = ("Roboto Mono", 12)
 manage_finder_font = ("Roboto Mono", 10)
 button_enable = {"state": "normal", "fg_color": "#206ca4"}
 button_disable = {"state": "disabled", "fg_color": "#506474"}
+app_data = os.getenv("APPDATA") + "\\Blur_Part_Organizer\\"
 
 
 def make_floating_frame(master, return_frame=False, scrolling_frame=False):
@@ -386,7 +387,7 @@ class MainWindow:
         self.kiosk_next_step = ctk.CTkFrame(self.kiosk_frame, width=1000, height=500, fg_color="transparent")
 
         button_size = 250
-        image_root_path = os.getenv("APPDATA") + "\\Blur_Part_Organizer\\resources\\"
+        image_root_path = app_data + "resources\\"
 
         for col_num, image_name, command in (
                 (0, "Check_Out.png", self.checkout_continue),
@@ -526,7 +527,7 @@ class MainWindow:
         try:
             # raise Exception("forced exception")
             try:
-                readme = open("README.md", "r")
+                readme = open(app_data + "resources\\README.md", "r")
                 document = "\n".join([s.rstrip() for s in readme.readlines()]).split("\n"*2)
 
             except FileNotFoundError as err:
@@ -542,16 +543,15 @@ class MainWindow:
 
                 # images
                 if line.startswith("![") and "](" in line and line.endswith(")"):
-                    image_link = line.split("](")[1].replace(")", "")
+                    image_path = line.split("](")[1].replace(")", "")
                     alt_text = line.split("](")[0].replace("![", "")
                     try:
-                        urllib.request.urlretrieve(image_link, "tmp.png")
-                        my_img = Image.open("tmp.png")
+                        my_img = Image.open(app_data + "\\resources\\" + image_path)
                         ctk_image = ctk.CTkImage(light_image=my_img, dark_image=my_img, size=(my_img.width, my_img.height))
                         ctk.CTkLabel(self.home_frame, image=ctk_image, text="", anchor="w").pack(fill="both", expand="yes", padx=45)
                         os_remove("tmp.png")
                         continue
-                    except urllib.error.URLError as err:
+                    except Exception as err:
                         # if the image can't load
                         line_len = 40
                         text = "\n".join((str(err) + " "*line_len)[i * line_len: (i+1) * line_len] for i in range(math.ceil(len(str(err))/line_len)))
@@ -559,7 +559,7 @@ class MainWindow:
                         # ctk.CTkLabel(self.home_frame, width=300, height=300, text=f"We couldn't load this image. to see the image,\n click on the link below.", fg_color="#5e5e5e").pack()
                         hyperlink = ctk.CTkLabel(self.home_frame, cursor="hand2", text=f"View Image \"{alt_text}\" in browser.", text_color="#a4a2f2", font=subtitle, anchor="w")
                         hyperlink.pack(fill="both", expand=True, padx=25, pady=10)
-                        hyperlink.bind("<Button-1>", lambda _, l=image_link: self.open_reference(ref=l))
+                        hyperlink.bind("<Button-1>", lambda _, l="https://github.com/TotalHelix/Blur_organizer_v2": self.open_reference(ref=l))
                         continue
 
                 # format titles [start pos, font size]
@@ -620,7 +620,7 @@ class MainWindow:
                 self.home_frame_base, font=subtitle,
                 text=f"We weren't able to load the home page.\n\nError: {str(e)}"
             ).grid(row=0, column=1)
-            # raise e  # TODONE comment this out again
+            raise e  # TODONE comment this out again
         finally:
             self.window.attributes('-fullscreen', True)
             # self.window.state("zoomed")
@@ -1424,10 +1424,6 @@ class MainWindow:
 
         # clear out the input box
         self.manage_search_box.configure(text="No Part Selected")
-
-        # try again to connect to the database (why is this in the raise_manage function? does this need to be here?)
-        # if (not self.controller) or self.controller.cursor_exists():
-        #     self.db_connect()
 
         # make sure the search mode is valid
         if search_type.lower() in ["user", "part"]:

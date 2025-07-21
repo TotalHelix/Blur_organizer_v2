@@ -53,15 +53,6 @@ else:
     db_dict = {}
 
 
-def random_word():
-    """
-    generate a single random word, all lowercase
-    :return: the second word of a lorem ipsum random sentence.
-    """
-
-    return lorem.sentence().split(" ")[1]
-
-
 def start_button():
     """
     Function for when the start button is pressed. Takes the current database selected in the options menu and launches
@@ -95,27 +86,25 @@ def create_new():
     update_options()
 
 
-def db_add_gui(edit_mode=False, add_db_name=""):
+def db_add_gui(edit_mode=False, add_db_name="", windows_to_close=None):
     """
     Bring up the form for adding a new database.
     :param edit_mode: list [display name, database name] of database option that you want to edit. If this option
         is left blank then the form will add a new part instead.
     :param add_db_name: the database name of the part that you are adding. This is used for adding a database from the
         "Connect Existing" gui
+    :param windows_to_close: list of windows that are closed when submitted.
     :return: None. Edits the db_dict dictionary.
     """
     global db_dict
     global select_db_var
-
     if edit_mode:
         part_display = select_db_var.get()
 
         # make sure a valid db has been selected
-        print(f"part_to_edit not in list(db_dict.keys()): {part_display not in list(db_dict.keys())}")
-        print(f"part_to_edit: {part_display}, list(db_dict.keys()): {list(db_dict.keys())}")
-        if part_display not in list(db_dict.keys()): return
+        if part_display not in db_dict.keys(): return
 
-        part_database = db_dict[part_display]
+        part_database = db_dict[part_display]["connection data"]["database"]
         fill_text = [part_display, part_database]
 
     else:
@@ -130,6 +119,10 @@ def db_add_gui(edit_mode=False, add_db_name=""):
     form_window = ctk.CTk()
     form_window.title = "Database Info"
     form_window.resizable(False, False)
+
+    # default windows to close
+    if not windows_to_close: windows_to_close = []
+    windows_to_close.append(form_window)
 
     # form questions
     form_questions = ["Display Name", "Database Name"]
@@ -149,7 +142,7 @@ def db_add_gui(edit_mode=False, add_db_name=""):
 
     # Confirm Cancel
     cc_frame = ctk.CTkFrame(form_window, fg_color="transparent")
-    ctk.CTkButton(cc_frame, text="Confirm", command=lambda: accept_db_form(form_answers, form_window, part_display)).grid(row=0, column=0, padx=10)
+    ctk.CTkButton(cc_frame, text="Confirm", command=lambda: accept_db_form(form_answers, windows_to_close, part_display)).grid(row=0, column=0, padx=10)
     ctk.CTkButton(cc_frame, text="Cancel", command=form_window.destroy).grid(row=0, column=1, padx=10)
     if edit_mode: ctk.CTkButton(cc_frame, text="Delete", command=lambda: delete_db_link(part_display, form_window), **red_button).grid(row=1, column=0, columnspan=2, pady=12)
     cc_frame.pack(pady=30)
@@ -204,11 +197,11 @@ def value_or_default(entry_widget):
     return entry_widget.cget("placeholder_text")
 
 
-def accept_db_form(entry_widgets, form_window, edit_entry=None):
+def accept_db_form(entry_widgets, form_windows, edit_entry=None):
     """
     Take all the entry widgets in the "create new database" form and add them to the dictionary
     :param entry_widgets: A list of length 2: [str Display Name, str Database Name]
-    :param form_window: the window of the form so that it can be closed
+    :param form_windows: list of windows to be closed.
     :param edit_entry: string display name of the part that you're editing. Adds new part if value is None (default)
     :return: None
     """
@@ -226,7 +219,10 @@ def accept_db_form(entry_widgets, form_window, edit_entry=None):
 
     # select the new option
     select_db_var.set(new_display_name)
-    form_window.destroy()
+
+    # close the windows
+    for window in form_windows:
+        window.destroy()
 
 
 def update_options(display_name=None, db_name=None, old_display_name=None):
@@ -289,7 +285,7 @@ def database_selector():
     se_frame = ctk.CTkFrame(selector_window, fg_color="transparent")
     se_frame.pack()
     ctk.CTkButton(se_frame, text="Start!", command=start_button).grid(row=0, column=0, padx=20, pady=2)
-    ctk.CTkButton(se_frame, text="Edit", command=lambda: db_add_gui(True)).grid(row=0, column=1, padx=20)
+    ctk.CTkButton(se_frame, text="Edit", command=edit_db).grid(row=0, column=1, padx=20)
 
     # OR
     ctk.CTkLabel(selector_window, text="OR").pack(pady=15)
@@ -306,11 +302,36 @@ def database_selector():
     selector_window.mainloop()
 
 
+def edit_db():
+    """edit the currently selected database"""
+    global select_db_var
+    global db_dict
+
+    # get the database name and data
+    db_name = select_db_var.get()
+    print(db_name, "in", list(db_dict.keys()))
+    if db_name not in list(db_dict.keys()): return
+    db_data = db_dict[db_name]
+
+    # if this is a local database
+    if db_data["type"] == "local":
+        db_add_gui(edit_mode=True)
+
+    # if we're connecting to a remote database
+    elif db_data["type"] == "remote":
+        remote_con_options(edit_mode=True)
+
+    # if it's something else??
+    else:
+        raise Exception(f"Unexpected database type: {db_data['type']}")
+
+
 def connect_existing():
     """Connect to a postgres database that already exists"""
 
     # list default
-    db_list = ["No Databases Found"]
+    no_db_msg = "No Databases Found"
+    db_list = [no_db_msg]
 
     # try to get databases
     try:
@@ -320,7 +341,6 @@ def connect_existing():
     # give an error message if we can't get a database
     except Exception as er:
         CTkMessagebox(title="Error", message="Something went wrong!\nError: "+str(er), option_1="OK", icon="cancel")
-        raise er  # TODO comment this one out too.
 
     # db selector window
     db_con_window = ctk.CTk()
@@ -333,9 +353,9 @@ def connect_existing():
     # frame to hold all the databases
     db_disp_frame = ctk.CTkScrollableFrame(db_con_window)
     for db_name in db_list:
-        new_button = ctk.CTkButton(db_disp_frame, text=db_name, fg_color="transparent", command=lambda n=db_name: db_add_gui(add_db_name=n))
-
+        new_button = ctk.CTkButton(db_disp_frame, text=db_name, fg_color="transparent", command=lambda n=db_name, w=db_con_window: db_add_gui(add_db_name=n, windows_to_close=[w]))
         new_button.pack()
+
     db_disp_frame.pack(padx=13, pady=7)
 
     # Done button
@@ -350,77 +370,113 @@ def connect_existing():
     db_con_window.mainloop()
 
 
-def remote_con_options(connect_window):
+def remote_con_options(connect_window=None, edit_mode=False):
+    global select_db_var
+
     remote_add_window = ctk.CTk()
-    fields = ["IP Address", "Port", "Username", "Password", "Database Name", "Display Name"]  # if you're changing these remember to change their ref in add_remote() as well!
+    selected_db_name = select_db_var.get()  # only used in edit mode
+
+    # link each field prompt (keys) to the json value (values)
+    fields = {
+        "IP Address": "host",
+        "Port": "port",
+        "Username": "user",
+        "Password": "password",
+        "Database Name": "database",
+        "Display Name": "Display Name"
+    }
+
     field_responses = {}
 
-    for field in fields:
+    for field_prompt, json_val in fields.items():
         # the frame to hold it
         long_frame = ctk.CTkFrame(remote_add_window, fg_color="transparent")
         long_frame.pack(pady=7)
 
         # make the variable for the entry
         string_var = ctk.StringVar(long_frame, value="")
-        field_responses[field] = string_var
+        field_responses[json_val] = string_var
 
         # The label and entry box
-        ctk.CTkLabel(long_frame, text=field, width=150).grid(row=0, column=0)
+        ctk.CTkLabel(long_frame, text=field_prompt, width=150).grid(row=0, column=0)
         ctk.CTkEntry(long_frame, textvariable=string_var).grid(row=0, column=1, padx=20)
 
-    ctk.CTkButton(remote_add_window, text="Connect", command=lambda: add_remote(field_responses, [remote_add_window, connect_window])).pack(pady=10)
+        # default text for edit mode
+        if edit_mode:
+            # the display name is a bit different, as it's a key not a value
+            if json_val == "Display Name": string_var.set(selected_db_name)
+
+            # set the filed text
+            else: string_var.set(db_dict[selected_db_name]["connection data"][json_val])
+
+    # the "connect" button
+    ctk.CTkButton(remote_add_window, text="Connect", command=lambda: add_remote(field_responses, [remote_add_window, connect_window], edit_mode=edit_mode)).pack(pady=10)
+
+    # the "delete" button (if in edit mode
+    if edit_mode: ctk.CTkButton(remote_add_window, text="Delete", command=lambda n=selected_db_name, r=remote_add_window: delete_db_link(n, r), **red_button).pack(pady=10)
 
     remote_add_window.mainloop()
 
 
-def add_remote(entries_list, windows_to_close):
+def add_remote(entries_list, windows_to_close, edit_mode=False):
     """Add a remote connection to the dictionary from the list of entries that we have."""
     global db_dict
+    global select_db_var
+
+    # if we're in edit mode, delete the original first to avoid overlap
+    if edit_mode:
+        del db_dict[select_db_var.get()]
 
     display_name = entries_list.pop("Display Name").get()
     db_dict[display_name] = {
         "type": "remote",
         "connection data": {
-            "database": entries_list["Database Name"].get(),
-            "user": entries_list["Username"].get(),
-            "password": entries_list["Password"].get(),
-            "host": entries_list["IP Address"].get(),
-            "port": entries_list["Port"].get()
+            val_to_add: value_or_default(entries_list[val_to_add])
+            for val_to_add in ["database", "user", "password", "host", "port"]
         }
     }
 
-    for window in windows_to_close: window.destroy()
+    # destroy all open windows (except for the main one of course)
+    for window in windows_to_close:
+        if window: window.destroy()
+
     select_db_var.set(display_name)
 
 
 def setup():
     """Pull important resources from the cloud to the local machine.
     Right now this is just images for image buttons."""
-    resources_path = json_location+"\\resources\\"
+    resources_path = json_location+"resources\\"
 
     # if this path doesn't exist yet, create the resources folder
     if not os.path.exists(resources_path):
         os.makedirs(resources_path)
 
-    remote_resources_path = "https://github.com/TotalHelix/Blur_organizer_v2/raw/main/images/"
-    things_to_download = [
-        "Check_Out.png",
-        "Check_Out_hover.png",
-        "Example Program Use.png",
-        "Return.png",
-        "Return_hover.png",
-        "Uncheck Stack Builder.png"
+    remote_resources_path = "https://github.com/TotalHelix/Blur_organizer_v2/raw/main/"
+    images_to_download = [
+        "images/Check_Out.png",
+        "images/Check_Out_hover.png",
+        "images/Return.png",
+        "images/Return_hover.png",
+        "images/Uncheck Stack Builder.png",
+        "images/connect_local_db.png",
+        "images/connect_remote.png",
+        "images/Database_Connection.png",
+        "images/new_database_details.png",
+        "README.md"
     ]
 
-    for file in things_to_download:
-        # if the file already exists, we don't need to redownlaod it
-        if os.path.isfile(resources_path+file): continue
+    for file in images_to_download:
+        local_path = resources_path+file.replace("images/", "")
+
+        # if the file already exists, we don't need to re-download it
+        if os.path.isfile(local_path): continue
 
         # get the image from github
         image_data = requests.get(remote_resources_path+file, stream=True)
 
         # write the image bytes file
-        with open(resources_path+file, "wb") as image_file:
+        with open(local_path, "wb") as image_file:
             shutil.copyfileobj(image_data.raw, image_file)
 
 

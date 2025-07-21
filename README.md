@@ -1,4 +1,4 @@
-# Blur part organizer
+# Blur Part Organizer
 
 This program is intended to help organize parts, calibrated equipment,
 etc. by utilizing a PostgreSQL database. This program should be set up
@@ -11,15 +11,16 @@ screen.
 
 ### Initial setup
 
-1. first, download the latest version of [PostgreSQL](https://www.enterprisedb.com/downloads/postgres-postgresql-downloads)
-and the [Zebra ZSB Drivers](https://zsbportal.zebra.com/apps). 
+1. first, download the latest version of the [Zebra ZSB Print Drivers](https://zsbportal.zebra.com/apps).
 
-2. Go through the Zebra ZSB setup. To log into the Zebra workspace,
-use the email blur.zebra@gmail.com and the password #Blur2018!!!
+2. Go through the ZSB printer setup and make sure that the printer is working
+   by printing a test label.
 
-3. Run the PostgreSQL setup, unchecking the box for Stack Builder
+3. If you are going to be hosting a local database, download [PostgreSQL](https://www.enterprisedb.com/downloads/postgres-postgresql-downloads). 
 
-![Uncheck Stack Builder](https://raw.githubusercontent.com/TotalHelix/Blur_organizer_v2/refs/heads/main/images/Uncheck%20Stack%20Builder.png)
+4. Run the PostgreSQL setup, unchecking the box for Stack Builder
+
+![Uncheck Stack Builder](images/Uncheck_Stack_Builder.png)
 
 4. Continue through the installer accepting all defaults, entering `blur4321` when 
 prompted for a password
@@ -27,26 +28,47 @@ prompted for a password
 5. In the Blur Organizer under the `Danger Zone` tab, select `Format Database` to
 set up the database
 
-## Example Program Use
-![Screenshot of program filled with sample data](https://raw.githubusercontent.com/TotalHelix/Blur_organizer_v2/refs/heads/main/images/Example%20Program%20Use.png)
+## Database Selector
 
-### Checking out parts
+The first screen that will open when the program is run is the database selector screen.
 
-Under the `Part Search` tab, select the part that you want to check out or return, and the click on the `Check Out` or `Return` buttons at the bottom.
+![Database Connection Screen](images/Database_Connection.png)
 
-### Adding a part or user
+### Creating a Local Database
 
-To add a part or user, go to the appropriate `Manage Parts` or `Manage Users` tab, and click on the `+ Add` button below the search box. Fill out the form according to the part/user that you want to add, and then click `Submit`.
+Click on the `Create New` button. This will open a popup window where you will 
+enter the reference name for your database and the name that PostgreSQL sees.
 
-### Finding a part or user
+![Enter Display Name and Database Name](images/new_database_details.png)
 
-If you are looking for a part, the search box in `Part Search` can search by UPC, description,
-manufacturer, manufacturer's part number, or placement location.
+Once you have entered this and clicked `Confirm`, it will add the database to the dropdown menu.
 
-If you're looking for a user, the search in `User Search` can find by either user id, name, 
-or email.
+### Connecting an Existing Local Database
 
-### Making a label
+If you've already created a database in PostgreSQL, but it isn't connected to the organizer, click on `Connect Existing`.
 
-With the part that you want to make a label for selected in the `Find a part` screen, click 
-the `Print` button.
+A list of every database in your local PostgreSQL will appear. Click on the one that you want to link.
+
+You will then be prompted for a new display name for this database. Whatever you enter will be added to the dropdown menu.
+
+![Connect to a local database](images/connect_local_db.png)
+
+### Connecting to a Remote Database
+
+If you want synchronization of data across devices, for example having multiple kiosks set up linking to one database, click on `Connect Existing` and then `Remote Database`.
+
+Enter the credentials of the database that you want to connect to. `Display Name` is simply the name that will be shown in the dropdown and is not something from the remote host.
+
+![Connect to a remote database](images/connect_remote.png)
+
+When you've entered the connection credentials hit `Connect` and it will add the new database to the dropdown. Hit `Start!` to launch the organizer.
+
+### Editing or Deleting a Database Link.
+
+Note: from this menu you can only edit or delete the database link, NOT the actual
+database. If you want to actually delete the database, you need to do that from
+the `Danger Zone` tab in the program.
+
+To edit the information of a database link or to delete a database, select it in the dropdown and hit `Edit`. This process is the same for both remote and local databases. 
+
+From here you can either edit the database info and hit `Connect` or `Done`, or you can hit `Delete` to remove the link.
