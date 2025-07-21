@@ -1,9 +1,7 @@
 import math
 import os
 import warnings
-from os import remove as os_remove
 import tkinter as tk
-import urllib
 import customtkinter as ctk
 from sys import exit
 import requests
@@ -546,12 +544,21 @@ class MainWindow:
                     image_path = line.split("](")[1].replace(")", "")
                     alt_text = line.split("](")[0].replace("![", "")
                     try:
-                        my_img = Image.open(app_data + "\\resources\\" + image_path)
-                        ctk_image = ctk.CTkImage(light_image=my_img, dark_image=my_img, size=(my_img.width, my_img.height))
+                        my_img = Image.open((app_data + "\\resources\\" + image_path).replace("images", ""))
+
+                        # adjust the size if it's too big
+                        max_width = 1000
+                        img_width = my_img.width
+                        img_height = my_img.height
+                        if img_width > max_width:
+                            img_height *= max_width/img_width
+                            img_width = max_width
+
+                        ctk_image = ctk.CTkImage(light_image=my_img, dark_image=my_img, size=(img_width, img_height))
                         ctk.CTkLabel(self.home_frame, image=ctk_image, text="", anchor="w").pack(fill="both", expand="yes", padx=45)
-                        os_remove("tmp.png")
                         continue
                     except Exception as err:
+                        # raise err
                         # if the image can't load
                         line_len = 40
                         text = "\n".join((str(err) + " "*line_len)[i * line_len: (i+1) * line_len] for i in range(math.ceil(len(str(err))/line_len)))

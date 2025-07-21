@@ -3,7 +3,6 @@ import shutil
 import requests
 from gui_elements_v2 import MainWindow, ctk, Organizer, CTkMessagebox
 import os
-import lorem
 
 
 # define fonts
@@ -454,31 +453,43 @@ def setup():
 
     remote_resources_path = "https://github.com/TotalHelix/Blur_organizer_v2/raw/main/"
     images_to_download = [
-        "images/Check_Out.png",
-        "images/Check_Out_hover.png",
-        "images/Return.png",
-        "images/Return_hover.png",
-        "images/Uncheck Stack Builder.png",
-        "images/connect_local_db.png",
-        "images/connect_remote.png",
-        "images/Database_Connection.png",
-        "images/new_database_details.png",
+        "Check_Out.png",
+        "Check_Out_hover.png",
+        "Return.png",
+        "Return_hover.png",
+        "Uncheck_Stack_Builder.png",
+        "connect_local_db.png",
+        "connect_remote.png",
+        "Database_Connection.png",
+        "new_database_details.png",
+    ]
+    plaintext_to_download = [
         "README.md"
     ]
 
     for file in images_to_download:
-        local_path = resources_path+file.replace("images/", "")
+        local_path = resources_path + file
+        github_path = remote_resources_path + "images/" + file
 
         # if the file already exists, we don't need to re-download it
         if os.path.isfile(local_path): continue
 
         # get the image from github
-        image_data = requests.get(remote_resources_path+file, stream=True)
+        image_data = requests.get(github_path, stream=True)
 
         # write the image bytes file
         with open(local_path, "wb") as image_file:
             shutil.copyfileobj(image_data.raw, image_file)
 
+    for file in plaintext_to_download:
+        local_path = json_location + file
+        github_path = remote_resources_path + file
+
+        text = requests.get(github_path).text
+        print("text got: ", text)
+
+        with open(local_path, "w") as text_file:
+            text_file.write(text)
 
 if __name__ == "__main__":
     setup()
