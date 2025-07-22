@@ -703,12 +703,16 @@ class MainWindow:
 
     def checkout_user_select(self, user_name):
         """select the user in the checkout user select frame with the specified username"""
-        print(f"called with name \"{user_name}\"")
 
         users_dict = self.controller.user_search(user_name, use_full_names=True)
         display_name = " ".join(list(users_dict.values())[0][1:2])
 
-        print(f"\tthis results in full name \"{display_name}\"")
+        # highlight the one option and unhighligh everything else
+        for button in self.checkout_search_options:
+            if button.cget("text") == display_name:
+                button.configure(fg_color="#144870")
+            else:
+                button.configure(fg_color="transparent")
 
         self.checkout_user = user_name
         self.checkout_finalize_button.configure(**button_enable)
@@ -1024,7 +1028,6 @@ class MainWindow:
     def add_part(self):
         """add a new part to the database"""
         self.form_mode_add = True  # set the form to add mode and not edit mode
-        self.back_to_checkout = False  # don't go back to the kiosk screen
 
         if self.search_mode == "part":
             self.new_part_form.tkraise()
@@ -1420,6 +1423,7 @@ class MainWindow:
         """raise the page for either the user or part management page"""
 
         # clear out the input box
+        self.back_to_checkout = False  # don't go back to the kiosk screen
         self.manage_search_box.configure(text="No Part Selected")
 
         # make sure the search mode is valid
@@ -1452,6 +1456,7 @@ class MainWindow:
     def raise_search(self, search_type):
         """clear the search box and raise either 'part search' or 'user search' depending on the search_type"""
 
+        self.back_to_checkout = False  # don't go back to the kiosk screen
         self.previous_screen = search_type
 
         # clear the selected part key, as no part is selected
