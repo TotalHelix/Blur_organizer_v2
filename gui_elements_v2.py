@@ -174,10 +174,11 @@ class MainWindow:
         print("conn info: "+str(conn_info))
         # database credentials
         self.db_name = conn_info["database"]
-        self.conn_info = conn_info
+        self.conn_info = dict(conn_info)
         self.customer_info = conn_info
         self.customer_info["user"] = f"customer_{self.db_name}"
         self.customer_info["password"] = "blur4321"
+        print("self.conn_info after assignment:", self.conn_info)
 
         # start the window (I know that your animations don't exist)
         self.window = ctk.CTk()
@@ -882,22 +883,22 @@ class MainWindow:
     def db_connect(self):
         if self.controller:
             warnings.warn("this should not be here!")
+        self.connection = False
 
+        print("trying to connect")
+        print(f"customer info:\t{self.customer_info}")
+        print(f"conn info:\t{self.conn_info}")
         try:
-            print("tyring to connect as admin")
-            with Organizer(conn_info=self.conn_info) as _:
-                print("connected as admin")
-                # we were able to access postgres
-                self.postgres_exists = True
-
-            # now we should be able to connect as a customer with no problem
-            print("tyring to connect as customer")
             self.controller = Organizer(conn_info=self.customer_info)
-            print("connected as customer")
-
             self.connection = True
-        except p2er.OperationalError as error_msg:
-            self.connection = False
+        except p2er.OperationalError as er:
+            print(f"layer 1 conn fail: {str(er)}")
+
+            try:
+                self.controller = Organizer(conn_info=self.conn_info)
+                self.connection = True
+            except p2er.OperationalError as err:
+                print(f"layer 2 conn fail: {str(err)}")
 
     @handle_exceptions
     def print_label(self, upc=None):
@@ -1223,17 +1224,6 @@ class MainWindow:
             self.manage_finder_update()
 
     @handle_exceptions
-    def reconnect_db(self):
-        # make a connection to the database
-        try:
-            self.controller = Organizer(conn_info=self.customer_info)
-            self.connection = True
-        except Exception as er:
-            self.connection = False
-            self.popup_msg(er)
-            raise er
-
-    @handle_exceptions
     def forget_popup(self, popup_id):
         if popup_id == self.popup_counter:
             self.popup_window.place_forget()
@@ -1324,10 +1314,10 @@ class MainWindow:
         except Exception as error:
             print("something went wrong:", str(error))
             self.popup_msg(str(error))
-            raise error
+            # raise error
         finally:
             print('reconnecting')
-            self.reconnect_db()
+            self.db_connect()
 
     @handle_exceptions
     def populate_database(self):
@@ -1502,6 +1492,8 @@ class MainWindow:
         active = self.check_db_connection()
         self.clear_part_results()
         if not active: return
+
+        if not self.connection: self.db_connect()
 
         # scroll back to the top
         self.result_parts._parent_canvas.yview_moveto(0)

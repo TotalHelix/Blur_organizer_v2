@@ -465,7 +465,8 @@ def setup():
         "Home_Screen.png",
         "Kiosk_Tab.png",
         "Part_Search.png",
-        "Manage_Parts.png"
+        "Manage_Parts.png",
+        "Danger_Zone_Tab.png"
     ]
     plaintext_to_download = [
         "README.md"
@@ -490,10 +491,10 @@ def setup():
         github_path = remote_resources_path + file
 
         text = requests.get(github_path).text
-        print("text got: ", text)
 
         with open(local_path, "w") as text_file:
             text_file.write(text)
+
 
 if __name__ == "__main__":
     setup()

@@ -197,9 +197,7 @@ class Organizer:
         self.cursor = None
 
         # self.conn and self.cursor are set in self.db_connect()
-        print("about to db connect")
         self.db_connect()
-        print("db connected")
 
         # self.cursor.execute("\\set autocommit on")
 
@@ -209,9 +207,13 @@ class Organizer:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.conn.commit()
-        self.cursor.close()
-        self.conn.close()
+        try:
+            if self.conn:
+                self.conn.commit()
+                self.cursor.close()
+                self.conn.close()
+        except db_err.InterfaceError:
+            print("Connection already closed")
 
     def db_connect(self, new_connection_info=None):
         """privilege will either be "customer" or "postgres" """
@@ -220,15 +222,13 @@ class Organizer:
 
         # if this is local database
         print(f"about to invoke postgres. conn info: {new_connection_info}")
-        try:
-            self.conn = connect(**new_connection_info)
-            print("connection established. Starting cursor")
-            self.cursor = self.conn.cursor()
-            self.conn.autocommit = True
-            self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-            print("cursor established.")
-        except Exception as error:
-            print(str(error))
+
+        self.conn = connect(**new_connection_info)
+        print("connection established. Starting cursor")
+        self.cursor = self.conn.cursor()
+        self.conn.autocommit = True
+        self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        print("cursor established.")
 
     def userid_exists(self, userid):
         """check if the userid specified exists in the database"""
@@ -491,11 +491,14 @@ CREATE TABLE public.{table}
         self.conn.close()
         self.db_connect(new_connection_info=self.postgres_info)
 
-        user_create = f"""
-        REASSIGN OWNED BY customer_{db_name} TO postgres;
+        drop_old_use = f"""
+        REASSIGN OWNED BY customer_{db_name} TO postgres ;
         DROP OWNED BY customer_{db_name};
         
         DROP ROLE IF EXISTS customer_{db_name};
+        """
+
+        user_create = f"""
         CREATE ROLE customer_{db_name}  WITH
             LOGIN
             NOINHERIT
@@ -515,6 +518,12 @@ CREATE TABLE public.{table}
         GRANT UPDATE ON ALL TABLES IN SCHEMA public TO postgres;
         GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO postgres;
         """
+
+        # try to drop the old user (it might not exist)
+        try: self.cursor.execute(drop_old_use)
+        except db_err.UndefinedObject: pass
+        self.conn.commit()
+
         self.cursor.execute(user_create)
         self.conn.commit()
 
