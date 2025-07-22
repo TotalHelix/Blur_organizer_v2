@@ -462,6 +462,10 @@ def setup():
         "connect_remote.png",
         "Database_Connection.png",
         "new_database_details.png",
+        "Home_Screen.png",
+        "Kiosk_Tab.png",
+        "Part_Search.png",
+        "Manage_Parts.png"
     ]
     plaintext_to_download = [
         "README.md"

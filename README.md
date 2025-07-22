@@ -72,3 +72,47 @@ the `Danger Zone` tab in the program.
 To edit the information of a database link or to delete a database, select it in the dropdown and hit `Edit`. This process is the same for both remote and local databases. 
 
 From here you can either edit the database info and hit `Connect` or `Done`, or you can hit `Delete` to remove the link.
+
+## Program Tabs
+
+![Program Home Screen](images/Home_Screen.png)
+
+When you open the program, the landing page will be this README file. If you're reading this from the program, this file was pulled from the [Blur Organizer GitHub](https://github.com/TotalHelix/Blur_organizer_v2).
+
+On the left sidebar there are 7 tabs, 6 blue on tob and the red `Danger Zone` tab at the bottom.
+
+### Home Tab
+
+this is the first page that opens when you start the program. This page simply displays the contents of the README.md file pulled from GitHub. 
+
+This is a homemade markdown renderer, so elements may not appear exactly as they would in a true markdown file
+
+## Kiosk Mode
+
+This is a simplified version of the `Part Search` tab ta make it easy to check out and return parts.
+
+When a valid part upc is entered or scanned into the textbox, options for checking out and returning a part will appear. 
+
+![Kiosk Mode Tab](images/Kiosk_Tab.png)
+
+## Part and User Search
+
+This is the easiest place to view information on parts or users. All items are arranged in a large table with a search bar at the top. 
+
+When clicking on a row, more detailed information will appear on the right-hand column. If a part is checked out or a user has a part checked out, an `Open` link will point to the reference in the other table.
+
+![Part Search Tab](images/Part_Search.png)
+
+### Manage Parts and Users
+
+These tabs allow you to change information in the database. A similar table to the search tabs is in the middle of the screen, with more options at the bottom.
+
+![Manage Parts Tab](images/Manage_Parts.png)
+
+### Danger Zone
+
+This is where you can make big, database-wide changes. There are currently 4 options under this tab: Format, Populate, Drop, and Change Location.
+
+Each option comes with a description under its title.
+
+![Danger Zone Tab](images/Danger_Zone_Tab.png)
